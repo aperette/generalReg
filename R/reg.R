@@ -58,8 +58,9 @@ reg_general=function(formula=NULL,
   if(is.null(control$max_it)) control$max_it=500
   if(is.null(control$kappa)) control$kappa=1
   if(is.null(control$verbose)) control$verbose=1
-  
-    
+
+  inputs = list(formula=formula,formula_var=formula_var,control=control,start=start)
+
     resposta=data[,as.character(formula)[2]]
     mu=as.character(formula)[3]
     S=tail(as.character(formula_var),1)
@@ -75,8 +76,8 @@ reg_general=function(formula=NULL,
     par[[2]]=theta
   }
 
-  if(control$verbose!=0) cat("Parametros do modelo:",paste0(theta,collapse=", "),"\n")
-  if(control$verbose!=0) cat("Covariaveis do modelo:",paste0(covar,collapse=","),"\n")
+  if(control$verbose!=0) cat("Parameters:",paste0(theta,collapse=", "),"\n")
+  if(control$verbose!=0) cat("Explanatory Variables :",paste0(covar,collapse=","),"\n")
 
   l=paste0("-0.5*log(",S,") -0.5*(",mu,"-resposta)^2/(",S,")")
 
@@ -219,13 +220,13 @@ reg_general=function(formula=NULL,
     return(S)}
 
   #skovgaard:
-  # eval(parse(text=paste0(
-  #   "gerar_Pd = function(theta, data){
-  #   N=nrow(data)
-  #   Matrix::Matrix(c(",
-  #   paste("rep(1,N)*",estruturar(Pd,par),collapse = ",")
-  #   ,"), nrow=N, sparse=T)}"
-  # )))
+  eval(parse(text=paste0(
+    "gerar_Pd = function(theta, data){
+    N=nrow(data)
+    Matrix::Matrix(c(",
+    paste("rep(1,N)*",estruturar(Pd,par),collapse = ",")
+    ,"), nrow=N, sparse=T)}"
+  )))
 
   eval(parse(text=paste0(
     "gerar_C = function(theta, data){
@@ -302,10 +303,10 @@ reg_general=function(formula=NULL,
     dif=max(abs(theta_val-theta_val_novo)/abs(theta_val))
     theta_val[1,]=theta_val_novo
 
-    if(is.na(dif) | dif>10000000) stop("Não convergiu",call. = F)
+    if(is.na(dif) | dif>10000000) stop("Non convergence",call. = F)
 
   }
-  if(k >= control$max_it | is.na(dif)) stop("Não convergiu após o número máximo de iterações",call. = F)
+  if(k >= control$max_it | is.na(dif)) stop("Iteration limit had been reached",call. = F)
   k=k-1
   }
 
@@ -373,6 +374,7 @@ reg_general=function(formula=NULL,
     function_C=gerar_C,
     function_D2=gerar_D2,
     #matrizes = list(F=Fn,H=Hn,S=Sn),
+    inputs = inputs,
     data = data,
     call = cl
   )
@@ -410,7 +412,7 @@ summary.genReg <- function(x, ...){
   cat("\n\nResiduals:\n")
   print(summary(x$res)[-4])
   cat("\n\nCoefficients:\n")
-  
+
   df=length(x$target)-length(x$parameters)+1
   coef=x$parameters
   se=x$fisher_obs %>% solve %>% diag %>% sqrt
@@ -448,10 +450,37 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   if(class(x)!="genReg")
     stop("x must be a genReg class",call. = F)
 
+  par_teste=parameters
+
+  formula=Reduce(paste, deparse(x$inputs$formula))
+  formula_var=Reduce(paste, deparse(x$inputs$formula_var))
+
+  equals_par = names(parameters)[names(parameters) %in% names(x$parameters)]
+  dif_par = names(parameters)[!names(parameters) %in% equals_par]
+  if(length(dif_par)>1) stop(paste0("Parameter",dif_par[1],"not found"),call. = F)
+
+  if(length(equals_par)<length(x$parameters)){
+    for(i in 1:length(equals_par)){
+      formula=stringr::str_replace_all(formula,equals_par[i],as.character(parameters[[equals_par[i]]]))
+      formula_var=stringr::str_replace_all(formula_var,equals_par[i],as.character(parameters[[equals_par[i]]]))
+    }
+
+    control=fit$inputs$control
+    control$verbose=0
+    cat("Finding MLE for H0:\n")
+
+    fit2=reg_general(
+      formula=as.formula(formula),
+      formula_var=as.formula(formula_var),
+      data=fit$data,
+      control=control)
+    cat(coef(fit2),"\n")
+    par_teste = coef(fit2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>% merge(parameters)
+  }
+
   loglike=function(y,media,var){
     sum(dnorm(y,mean=media,sqrt(var),log=T))}
   theta=coef(x) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor)
-  par_teste = dplyr::bind_rows(theta,parameters) %>% dplyr::summarise_all(funs(tail(na.omit(.),1)))
   p=length(theta)
   q=length(parameters)
   data=x$data
@@ -466,6 +495,8 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   l0=loglike(y,mu0,var0)
 
   LR=2*(l1-l0)
+  if(LR<0) stop("Likelihood ratio test statistic is negative",call. = F)
+
   pv=pchisq(LR,df = q,lower.tail = F)
 
   if(correction==FALSE){return(list(LR=LR,p_value=pv))}
@@ -476,8 +507,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   u0=(z0^2)/var0
   P=sqrt(var)
   P0=Matrix::diag(x$function_sigma(par_teste,x$data))^0.5
-  Pd=x$function_Pd(theta,data)
-  Pd0=x$function_Pd(par_teste,data)
+  Pd=0.5*diag(1/sqrt(var))%*%x$function_V(theta,data)
   a=(y-x$fitted.values)/P
   u00=(a^2)*(P0^2)/var0
 
@@ -501,7 +531,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
   G00 = apply(B00[,aux1]*A0[,aux2] + E00,2,sum) %>% matrix(nrow=length(theta))
 
-  R = x$function_Pd(theta,data)*a + x$function_D(theta,data)
+  R = Pd*a + x$function_D(theta,data)
 
   Q = x$function_D(theta,data)+z*x$function_V(theta,data)/var
   Q00 = x$function_D(par_teste,data)+a*P0*x$function_V(par_teste,data)/var0
@@ -519,17 +549,19 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   w=which(!names(theta) %in% names(parameters))
 
   J00=as.matrix(J00)
-  p1=det(J)^0.5*det(Ud0)^-1*det(J[w,w])^0.5*det(J00[w,w])^-0.5*det(J00)^0.5
-  p2=(t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
+  p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
+  p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
   p3=LR^(q/2-1)
-  p4=t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0
-  rho=p1*p2/(p3*p4)
-  LR2=LR-2*log(rho)[1,1]
+  p4=Matrix::t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0
+  rho=p1*p2[1,1]/(p3*p4[1,1])
+  LR2=LR-2*log(rho)
 
-  pv2=tryCatch(pchisq(LR2,df = q,lower.tail = F), error=function(e)NA)
-  erro=0 + (p1<0) + 2*(p1<0) + 3*(p1<0) + 4*(p4<0)
+  if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0) + (LR2<0))>0)
+    warning("Negative values are founded in Skovgaard's correction",call. = F)
+  pv2=tryCatch(pchisq(LR2,df = q,lower.tail = F), error=function(e) NA)
 
-  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2,erro=erro)
+
+  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2)
   class(out) = "lr_ratio"
   return(out)
 }
