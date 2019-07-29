@@ -14,4 +14,4 @@ fit2 = generalReg::reg_general(Y~beta1*exp(0.01*X),~8.3*exp(0.01*X),data=data,
                               start = list(beta1=1),
                               bias_correction = F,control=list(parada = 0.001,kappa=0.2))
 generalReg::likelihood_ratio(fit,list(beta1=1,beta2=0.01,sigma1=log(8.3),sigma2=0.01),correction = T)
-generalReg::likelihood_ratio(fit,list(beta2=0.01,sigma1=log(8.3),sigma2=0.01))
+generalReg::likelihood_ratio(fit,list(sigma1=log(8.3)),correction=T)

@@ -7,6 +7,7 @@
     "folds" : "",
     "hash" : "0",
     "id" : "B5D926D5",
+<<<<<<< Updated upstream
     "lastKnownWriteTime" : 1564442934,
     "last_content_update" : 1564442934,
     "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/reg.R",
@@ -14,6 +15,15 @@
     "properties" : {
         "cursorPosition" : "567,0",
         "scrollLine" : "536"
+=======
+    "lastKnownWriteTime" : 1564366380,
+    "last_content_update" : 1564366380526,
+    "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/reg.R",
+    "project_path" : "R/reg.R",
+    "properties" : {
+        "cursorPosition" : "567,78",
+        "scrollLine" : "554"
+>>>>>>> Stashed changes
     },
     "relative_order" : 2,
     "source_on_save" : false,

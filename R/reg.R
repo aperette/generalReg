@@ -295,7 +295,9 @@ reg_general=function(formula=NULL,
     Hn=gerar_H(sigma)
     Sn=gerar_s(media,sigma,theta_val)
 
-    theta_val_novo = (solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]
+    theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
+                              error=function(e)NA)
+    if(is.na(theta_val_novo)[1]) stop("Non convergence",call. = F)
     names(theta_val_novo) = theta
 
     interacao[[k]]=theta_val_novo
@@ -347,7 +349,7 @@ reg_general=function(formula=NULL,
   obs = Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
     matrix(t(gerar_s(media,sigma,theta_val,all = F)) %*% Hn %*% G,ncol=length(theta))
 
-
+  if(is.null(names(theta_val_novo))) names(theta_val_novo)= theta
 
   out <- list(
     parameters=theta_val_novo,
@@ -446,7 +448,7 @@ predict.genReg <- function(x, newdata=NULL, type = "mean", ...){
 }
 
 #' @export
-likelihood_ratio <- function(x, parameters,correction=FALSE){
+likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=NULL){
   if(class(x)!="genReg")
     stop("x must be a genReg class",call. = F)
 
@@ -456,8 +458,9 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
   formula_var=Reduce(paste, deparse(x$inputs$formula_var))
 
   equals_par = names(parameters)[names(parameters) %in% names(x$parameters)]
-  dif_par = names(parameters)[!names(parameters) %in% equals_par]
-  if(length(dif_par)>1) stop(paste0("Parameter",dif_par[1],"not found"),call. = F)
+  dif_par = names(x$parameters)[!names(x$parameters) %in% equals_par]
+  wrong_par = names(parameters)[!names(parameters) %in% names(x$parameters)]
+  if(length(wrong_par)>1) stop(paste0("Parameter ",dif_par[1]," not found"),call. = F)
 
   if(length(equals_par)<length(x$parameters)){
     for(i in 1:length(equals_par)){
@@ -465,19 +468,24 @@ likelihood_ratio <- function(x, parameters,correction=FALSE){
       formula_var=stringr::str_replace_all(formula_var,equals_par[i],as.character(parameters[[equals_par[i]]]))
     }
 
-    control=fit$inputs$control
+    if(!is.null(control$reltol)) x$inputs$control$reltol=control$reltol
+    if(!is.null(control$max_it)) x$inputs$control$max_it=control$max_it
+    if(!is.null(control$kappa)) x$inputs$control$kappa=control$kappa
+    x$inputs$start = x$inputs$start[dif_par]
+    if(is.null(start)) start=x$inputs$start
+    control=x$inputs$control
     control$verbose=0
     cat("Finding MLE for H0:\n")
 
-    fit2=reg_general(
+    x2=reg_general(
       formula=as.formula(formula),
       formula_var=as.formula(formula_var),
-      data=fit$data,
+      start=x$inputs$start,
+      data=x$data,
       control=control)
-    cat(coef(fit2),"\n")
-    par_teste = coef(fit2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>% merge(parameters)
+    cat(paste(names(coef(x2)),round(coef(x2),3),sep=":",collapse="  "),"\n")
+    par_teste = coef(x2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>% merge(parameters)
   }
-
   loglike=function(y,media,var){
     sum(dnorm(y,mean=media,sqrt(var),log=T))}
   theta=coef(x) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor)
