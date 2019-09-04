@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1567627277985.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3E1A0974",
+    "lastKnownWriteTime" : 1567627586,
+    "last_content_update" : 1567627586342,
+    "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/auxi.R",
+    "project_path" : "R/auxi.R",
+    "properties" : {
+        "cursorPosition" : "32,34",
+        "scrollLine" : "18"
+    },
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

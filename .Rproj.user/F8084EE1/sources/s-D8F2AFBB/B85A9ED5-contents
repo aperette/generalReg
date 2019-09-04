@@ -52,10 +52,12 @@ reg_general=function(formula=NULL,
     if(!is.list(start))
       stop("start must be a list",call. = F)
     theta=names(start)}
-  if(is.numeric(control$kappa) & (control$kappa<=0 | control$kappa>1))
-    stop("kappa must be in interval (0,1]",call. = F)
-  if(is.character(control$kappa) & control$kappa!="AUTO")
-    stop('kappa must be numeric or "AUTO"',call. = F)
+  if(is.numeric(control$kappa))
+    if(control$kappa<=0 | control$kappa>1)
+      stop("kappa must be in interval (0,1]",call. = F)
+  if(is.character(control$kappa))
+    if(control$kappa!="AUTO")
+      stop('kappa must be numeric or "AUTO"',call. = F)
 
 
   if(is.null(control$reltol)) control$reltol=0.0001
