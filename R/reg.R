@@ -35,9 +35,8 @@ reg_general=function(formula=NULL,
                    data,
                    start=NULL,
                    method="NR",
-                   control=list(reltol=0.0001,max_it=500,kappa=1,verbose=1),
-                   bias_correction=T,
-                   simular=F){
+                   control=list(reltol=0.0001,max_it=500,kappa="AUTO",verbose=0),
+                   bias_correction=F){
 
   if(is.null(formula)){
     stop('arguments "formula" is missing, with no default',call. = F)}
@@ -51,15 +50,20 @@ reg_general=function(formula=NULL,
     stop("control must be a list",call. = F)
   if(!is.null(start)){
     if(!is.list(start))
-      stop("start must be a list")
+      stop("start must be a list",call. = F)
     theta=names(start)}
+  if(is.numeric(control$kappa) & (control$kappa<=0 | control$kappa>1))
+    stop("kappa must be in interval (0,1]",call. = F)
+  if(is.character(control$kappa) & control$kappa!="AUTO")
+    stop('kappa must be numeric or "AUTO"',call. = F)
+
 
   if(is.null(control$reltol)) control$reltol=0.0001
   if(is.null(control$max_it)) control$max_it=500
   if(is.null(control$kappa)) control$kappa=1
-  if(is.null(control$verbose)) control$verbose=1
+  if(is.null(control$verbose)) control$verbose=0
 
-  inputs = list(formula=formula,formula_var=formula_var,control=control,start=start)
+  inputs = list(formula=formula,formula_var=formula_var,control=control,start=start,bias_correction=bias_correction)
 
     resposta=data[,as.character(formula)[2]]
     mu=as.character(formula)[3]
@@ -77,7 +81,7 @@ reg_general=function(formula=NULL,
   }
 
   if(control$verbose!=0) cat("Parameters:",paste0(theta,collapse=", "),"\n")
-  if(control$verbose!=0) cat("Explanatory Variables :",paste0(covar,collapse=","),"\n")
+  if(control$verbose!=0) cat("Predictors:",paste0(covar,collapse=","),"\n")
 
   l=paste0("-0.5*log(",S,") -0.5*(",mu,"-resposta)^2/(",S,")")
 
@@ -215,7 +219,7 @@ reg_general=function(formula=NULL,
     res=resposta-media
     s2=-(Matrix::diag(sigma)-res^2)
     s=c(rbind(res,s2))
-    if(all==F) return(s)
+    if(all==F | p=="AUTO") return(s)
     S=Fn %*% unlist(theta) + s*p
     return(S)}
 
@@ -256,6 +260,8 @@ reg_general=function(formula=NULL,
   }
 
 
+  loglike_sim=array()
+  erros=array()
   interacao=list()
   if(!is.null(start))
     start= unlist(start,use.names = F)
@@ -265,7 +271,6 @@ reg_general=function(formula=NULL,
 
   if(method=="optim"){
     logit=function(p){
-      p=0.5*(p+1)
       p=log(p/(1-p))
       ifelse(is.infinite(p),NA,p)}
 
@@ -274,44 +279,78 @@ reg_general=function(formula=NULL,
                           aux=-log_like(logit(par),data)
                           if(is.na(aux)) aux=Inf
                           return(aux)},
-                        control=list(maxit=control$max_it))
-
+                       upper=1,lower=0,
+                        control=list(maxit=control$max_it,max.restart=1,reltol=control$reltol,
+                                     trace=control$verbose,REPORT=control$verbose))
     k=opt$counts[2]
+    if(opt$convergence==2)
+      stop("Maximal number of iterations reached",call. = F)
     theta_val_novo = logit(opt$par)
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=logit(opt$par),nome=theta) %>% tidyr::spread(nome,valor)
+    dif=NA
   }
-
   if(method=="NR"){
     k=1
     dif=1
   while(dif>control$reltol & k <= control$max_it){
 
-    if(control$verbose>1) cat(paste0("Iteração ",k,"\n"))
-
     sigma=gerar_sigma(theta_val,data)
     media=gerar_mu(theta_val,data)
     Fn=gerar_F(theta_val,data)
     Hn=gerar_H(sigma)
-    Sn=gerar_s(media,sigma,theta_val)
+    loglike_sim[k]=sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T))
 
-    theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
-                              error=function(e)NA)
+    if(is.numeric(control$kappa)){
+      Sn=gerar_s(media,sigma,theta_val)
+      theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
+                              error=function(e)NA)}
+    if(control$kappa=="AUTO"){
+      kappa=optim(0.5,function(par){
+        teste = tryCatch(expr={
+          (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
+          error=function(e)NA)
+        theta_val[1,]=teste
+        -sum(dnorm(resposta,gerar_mu(theta_val,data),sqrt(Matrix::diag(gerar_sigma(theta_val,data))),log = T))},
+        method="Brent",lower=0,upper=1)$par
+
+
+      theta_val_novo = tryCatch(expr={
+        (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = kappa))[,1]},
+                                error=function(e)NA)
+      }
+
+
     if(is.na(theta_val_novo)[1]) stop("Non convergence",call. = F)
     names(theta_val_novo) = theta
 
     interacao[[k]]=theta_val_novo
     k=k+1
     dif=max(abs(theta_val-theta_val_novo)/abs(theta_val))
+    erros[k-1]=mean((media-resposta)^2)
     theta_val[1,]=theta_val_novo
+
+    if(control$verbose>0 & (k %% control$verbose)==0 & control$kappa=="AUTO")
+      cat(paste0("It ",k,
+                 ": loglikelihood=",round(-loglike_sim[k-1],2),
+                 " dif=",formatC(dif,format = "e", digits = 2),
+                 ", kappa=",round(kappa,3),"\n"))
+
+    if(control$verbose>0 & (k %% control$verbose)==0 & is.numeric(control$kappa))
+      cat(paste0("It ",k,
+                 ": loglikelihood=",round(-loglike_sim[k-1],2),
+                 " dif=",formatC(dif,format = "e", digits = 2),"\n"))
+
 
     if(is.na(dif) | dif>10000000) stop("Non convergence",call. = F)
 
   }
-  if(k >= control$max_it | is.na(dif)) stop("Iteration limit had been reached",call. = F)
+  if(k >= control$max_it | is.na(dif)) stop("Maximal number of iterations reached",call. = F)
   k=k-1
+  # if(which.max(loglike_sim)!=length(loglike_sim) &
+  #    lm(erros~index,data=data.frame(erros,index=1:length(erros)))$coef[2]>0)
+  #   warning("Estimate may not be a Maximum Likelihood Estimation",call. = F)
   }
-
 
   sigma=gerar_sigma(theta_val,data)
   media=gerar_mu(theta_val,data)
@@ -319,41 +358,28 @@ reg_general=function(formula=NULL,
   Hn=gerar_H(sigma)
   Sn=gerar_s(media,sigma,theta_val)
 
-
-  if(simular==F){
-  if(bias_correction){
-    bias=correcao_vies()
-    theta_val[1,]=theta_val_novo-bias[,1]
-    theta_val_novo=unlist(theta_val[1,])
-    media=gerar_mu(theta_val,data)
-    sigma=gerar_sigma(theta_val,data)
-    Fn=gerar_F(theta_val,data)
-    Hn=gerar_H(sigma)
-    Sn=gerar_s(media,sigma,theta_val)
-  }}
+  #Fisher obs
+  G=gerar_G(theta_val,data)
+  M2 = gerar_M2(media,sigma)
+  obs = Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
+    matrix(t(gerar_s(media,sigma,theta_val,all = F)) %*% Hn %*% G,ncol=length(theta))
 
   corrigido=NA
-  if(simular==T){
+  if(bias_correction){
     bias=correcao_vies()
+    # theta_val[1,]=theta_val_novo-bias[,1]
+    # theta_val_novo=unlist(theta_val[1,])
+    # media=gerar_mu(theta_val,data)
+    # sigma=gerar_sigma(theta_val,data)
     corrigido=theta_val_novo-bias[,1]
     corrigido=unlist(corrigido)
   }
 
-
-  #Information Obs
-
-
-  G=gerar_G(theta_val,data)
-  M2 = gerar_M2(media,sigma)
-
-  obs = Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
-    matrix(t(gerar_s(media,sigma,theta_val,all = F)) %*% Hn %*% G,ncol=length(theta))
-
-  if(is.null(names(theta_val_novo))) names(theta_val_novo)= theta
+if(is.null(names(theta_val_novo))) names(theta_val_novo)= theta
 
   out <- list(
     parameters=theta_val_novo,
-    corrigido=corrigido,
+    corrected_parameters=corrigido,
     fitted.values = media,
     residuals = resposta-media,
     var = sigma,
@@ -363,6 +389,9 @@ reg_general=function(formula=NULL,
     fisher_obs = -1*obs,
     loglike = sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T)),
     target=resposta,
+    epsilon=dif,
+    theta=theta_val[1,],
+    loglike_steps=loglike_sim,
     function_loglike=log_like,
     function_mu = gerar_mu,
     function_sigma = gerar_sigma,
@@ -375,7 +404,6 @@ reg_general=function(formula=NULL,
     function_G=gerar_G,
     function_C=gerar_C,
     function_D2=gerar_D2,
-    #matrizes = list(F=Fn,H=Hn,S=Sn),
     inputs = inputs,
     data = data,
     call = cl
@@ -392,7 +420,7 @@ setClass("genReg")
 #' @method print genReg
 #' @export
 print.genReg <- function(x, ...){
-  cat("\nCall:\n")
+  cat("Call:\n")
   print(x$call)
 
   ndec=stringr::str_length(stringr::str_extract(as.character(x$parameters), "\\.[0-9]*")) - 1
@@ -400,6 +428,9 @@ print.genReg <- function(x, ...){
   nround=(min(5,max(ndec,na.rm=T)))
   cat("\n\nCoefficients:\n")
   print(round(x$parameters,nround))
+  if(x$inputs$bias_correction)
+  cat("\nCorrected coefficients:\n")
+  print(round(x$corrected_parameters,nround))
   cat("\n")
 }
 
@@ -475,7 +506,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
     if(is.null(start)) start=x$inputs$start
     control=x$inputs$control
     control$verbose=0
-    cat("Finding MLE for H0:\n")
+    cat("MLE under H0:\n")
 
     x2=reg_general(
       formula=as.formula(formula),
@@ -572,4 +603,20 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2)
   class(out) = "lr_ratio"
   return(out)
+}
+
+#' @method print lr_ratio
+#' @export
+print.lr_ratio <- function(x, ...){
+  cat("Likelihood ratio test:\n")
+  x$LR=paste0("LR:",round(x$LR,3))
+  x$p_value=paste0("p-value:",formatC(x$p_value,format = "e", digits = 2))
+  cat(c(x$LR,x$p_value),"\n")
+  if(length(x)>2){
+    cat("Skovgaard correction:\n")
+  x$LR_correction=paste0("LR*:",round(x$LR_correction,3))
+  x$p_value_correction=paste0("p-value:",formatC(x$p_value_correction,format = "e", digits = 2))
+  cat(c(x$LR_correction,x$p_value_correction),"\n")
+
+  }
 }

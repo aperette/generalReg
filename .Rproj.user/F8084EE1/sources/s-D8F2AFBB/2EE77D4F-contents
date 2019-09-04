@@ -1,0 +1,30 @@
+data=data.frame(
+  X=c(405.65, 498.75, 567.25, 618.3, 681.45, 
+      405.65, 498.75, 567.25, 618.3, 681.45, 681.45, 681.45, 681.45,
+      681.45,681.45,681.45,681.45,681.45),
+  Y=c(90.5, 161.6, 246.743, 
+      422.936, 868.662, 113.383, 207.65, 309.514, 460.686, 972.383, 
+      999.633, 1034, 1047,1072.022,1133.287,1141.883,1266.290,1169.767))
+
+theta_ini = list(beta1=1,beta2=0.01,sigma1=log(8.3),sigma2=0.01)
+fit = generalReg::reg_general(Y~beta1*exp(beta2*X),~exp(sigma1+sigma2*X),data=data,
+                              start = theta_ini,
+                              bias_correction = F,control=list(reltol = 1e-5,verbose=1,max_it=2000,kappa="AUTO"))
+fit2 = generalReg::reg_general(Y~beta1*exp(beta2*X),~exp(sigma1+sigma2*X),data=data,
+                              start = theta_ini,
+                              method="optim",
+                              bias_correction = F,control=list(reltol = 1e-5,verbose=0,max_it=5000))
+test=generalReg::likelihood_ratio(fit,list(beta1=1,beta2=0.01,sigma1=log(8.3),sigma2=0.01),correction = T)
+generalReg::likelihood_ratio(fit,list(sigma1=log(8.3)),correction=T)
+
+logit=function(p){
+  p=log(p/(1-p))
+  ifelse(is.infinite(p),NA,p)}
+log_like=fit2$function_loglike
+opt = pso::psoptim(rep(NA,4),
+                   fn=function(par){
+                     aux=-log_like(logit(par),data)
+                     if(is.na(aux)) aux=Inf
+                     return(aux)},
+                   upper=1,lower=0,
+                   control=list(maxit=4000,max.restart=1,reltol=1e-5,trace=1))

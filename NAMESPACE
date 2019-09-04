@@ -3,6 +3,7 @@
 S3method(coef,genReg)
 S3method(predict,genReg)
 S3method(print,genReg)
+S3method(print,lr_ratio)
 S3method(summary,genReg)
 export("%>%")
 export(likelihood_ratio)
