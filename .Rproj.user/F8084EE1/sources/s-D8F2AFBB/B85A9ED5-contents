@@ -428,9 +428,9 @@ print.genReg <- function(x, ...){
   nround=(min(5,max(ndec,na.rm=T)))
   cat("\n\nCoefficients:\n")
   print(round(x$parameters,nround))
-  if(x$inputs$bias_correction)
+  if(x$inputs$bias_correction){
   cat("\nCorrected coefficients:\n")
-  print(round(x$corrected_parameters,nround))
+  print(round(x$corrected_parameters,nround))}
   cat("\n")
 }
 
