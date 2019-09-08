@@ -1,0 +1,10 @@
+{.e1 <- x^beta3; -(beta1 * beta2 * .e1 * log(x)/(1 + beta2 * .e1)^2)}
+
+x=0
+beta0=0.44
+beta1 = 7.55
+beta2=0.13
+beta3=0.96
+sigma0=5
+-beta1 * beta2 * x^beta3 * log(x)
+(1 + beta2 * x^beta3)^2

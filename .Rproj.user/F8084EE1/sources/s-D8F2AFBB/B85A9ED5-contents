@@ -79,6 +79,9 @@ reg_general=function(formula=NULL,
   if(is.null(start)){
     theta=par[[2]]
   }else{
+    out = par[[2]][!par[[2]] %in% theta]
+    if(length(out)>0)
+      stop(paste0(out[1]," not found in start"),call. = F)
     par[[2]]=theta
   }
 
@@ -300,18 +303,26 @@ reg_general=function(formula=NULL,
     sigma=gerar_sigma(theta_val,data)
     media=gerar_mu(theta_val,data)
     Fn=gerar_F(theta_val,data)
+    if(sum(is.na(Fn))>0) stop("Missing values in matrix F",call. = F)
     Hn=gerar_H(sigma)
+    score = Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,all=F)
+    fisher = Matrix::t(Fn)%*%Hn%*%Fn
+    inv_fisher= Matrix::solve(fisher,tol=1e-2000)
     loglike_sim[k]=sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T))
 
     if(is.numeric(control$kappa)){
       Sn=gerar_s(media,sigma,theta_val)
-      theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
+      # theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
+      #                         error=function(e)NA)
+      theta_val_novo = tryCatch(expr={unlist(theta_val) + control$kappa*(inv_fisher %*% score)[,1]},
                               error=function(e)NA)}
     if(control$kappa=="AUTO"){
+      theta_atual=theta_val
       kappa=optim(0.5,function(par){
+        # teste = tryCatch(expr={
+        #   (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
         teste = tryCatch(expr={
-          (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
-          error=function(e)NA)
+          (unlist(theta_atual) + par[1]*(inv_fisher %*% score))[,1]},error=function(e)NA)
         theta_val[1,]=teste
         -sum(dnorm(resposta,gerar_mu(theta_val,data),sqrt(Matrix::diag(gerar_sigma(theta_val,data))),log = T))},
         method="Brent",lower=0,upper=1)$par
@@ -334,13 +345,13 @@ reg_general=function(formula=NULL,
 
     if(control$verbose>0 & (k %% control$verbose)==0 & control$kappa=="AUTO")
       cat(paste0("It ",k,
-                 ": loglikelihood=",round(-loglike_sim[k-1],2),
+                 ": log-likelihood=",round(-loglike_sim[k-1],2),
                  " dif=",formatC(dif,format = "e", digits = 2),
                  ", kappa=",round(kappa,3),"\n"))
 
     if(control$verbose>0 & (k %% control$verbose)==0 & is.numeric(control$kappa))
       cat(paste0("It ",k,
-                 ": loglikelihood=",round(-loglike_sim[k-1],2),
+                 ": log-likelihood=",round(-loglike_sim[k-1],2),
                  " dif=",formatC(dif,format = "e", digits = 2),"\n"))
 
 

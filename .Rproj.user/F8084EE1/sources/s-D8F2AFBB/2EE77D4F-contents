@@ -11,6 +11,9 @@ fit = generalReg::reg_general(Y~beta1*exp(beta2*X),~exp(sigma1+sigma2*X),data=da
                               start = theta_ini,
                               bias_correction = F,control=list(reltol = 1e-5,verbose=1,max_it=2000,kappa="AUTO"))
 fit2 = generalReg::reg_general(Y~beta1*exp(beta2*X),~exp(sigma1+sigma2*X),data=data,
+                              start = theta_ini,type=1,
+                              bias_correction = F,control=list(reltol = 1e-5,verbose=1,max_it=2000,kappa=1))
+fit2 = generalReg::reg_general(Y~beta1*exp(beta2*X),~exp(sigma1+sigma2*X),data=data,
                               start = theta_ini,
                               method="optim",
                               bias_correction = F,control=list(reltol = 1e-5,verbose=0,max_it=5000))
