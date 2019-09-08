@@ -58,8 +58,10 @@ reg_general=function(formula=NULL,
   if(is.character(control$kappa))
     if(control$kappa!="AUTO")
       stop('kappa must be numeric or "AUTO"',call. = F)
-
-
+  if(!is.na(method))
+    if(!method %in% c("pso","optim","NR"))
+      stop('method should be one of "NR", "pso", "optim"',call. = F)
+  if(is.na(method)) method="NONE"
   if(is.null(control$reltol)) control$reltol=0.0001
   if(is.null(control$max_it)) control$max_it=500
   if(is.null(control$kappa)) control$kappa=1
@@ -211,15 +213,6 @@ reg_general=function(formula=NULL,
       {Matrix::.sparseDiagonal(x=.,n=length(.))}
   }
 
-  # gerar_T = function(theta,data){
-  #   z=resposta-gerar_mu(theta,data)
-  #   sigma=gerar_sigma(theta,data)
-  #   D=gerar_D(theta,data)
-  #   V=gerar_V(theta,data)
-  #   D+z*V/sigma
-  # }
-
-
   gerar_s=function(media,sigma,theta,p=control$kappa,all=T){
     res=resposta-media
     s2=-(Matrix::diag(sigma)-res^2)
@@ -274,7 +267,8 @@ reg_general=function(formula=NULL,
     start= rep(1,length(theta))
   theta_val = data.frame(matrix(start,nrow=1,dimnames = list(NULL,theta)))
 
-  if(method=="optim"){
+  if(method=="pso"){
+    if(control$verbose!=0) cat("In pso, start values are not used\n")
     logit=function(p){
       p=log(p/(1-p))
       ifelse(is.infinite(p),NA,p)}
@@ -295,6 +289,22 @@ reg_general=function(formula=NULL,
     theta_val=data.frame(valor=logit(opt$par),nome=theta) %>% tidyr::spread(nome,valor)
     dif=NA
   }
+  if(method=="optim"){
+    opt = optim(unlist(theta_val),
+                fn=function(par){
+                  aux=-log_like(par,data)
+                  if(is.na(aux)) aux=Inf
+                  return(aux)},
+                control=list(maxit=control$max_it,reltol=control$reltol,
+                             trace=1*(control$verbose>0),REPORT=control$verbose))
+    k=opt$counts[1]
+    if(opt$convergence==1)
+      stop("Maximal number of iterations reached",call. = F)
+    theta_val_novo = opt$par
+    names(theta_val_novo)=theta
+    theta_val=data.frame(valor=opt$par,nome=theta) %>% tidyr::spread(nome,valor)
+    dif=NA
+  }
   if(method=="NR"){
     k=1
     dif=1
@@ -307,7 +317,8 @@ reg_general=function(formula=NULL,
     Hn=gerar_H(sigma)
     score = Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,all=F)
     fisher = Matrix::t(Fn)%*%Hn%*%Fn
-    inv_fisher= Matrix::solve(fisher,tol=1e-2000)
+    inv_fisher= tryCatch(expr={Matrix::solve(fisher,tol=1e-2000)},
+                         error=function(e)NA)
     loglike_sim[k]=sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T))
 
     if(is.numeric(control$kappa)){
@@ -318,19 +329,19 @@ reg_general=function(formula=NULL,
                               error=function(e)NA)}
     if(control$kappa=="AUTO"){
       theta_atual=theta_val
-      kappa=optim(0.5,function(par){
-        # teste = tryCatch(expr={
-        #   (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
-        teste = tryCatch(expr={
-          (unlist(theta_atual) + par[1]*(inv_fisher %*% score))[,1]},error=function(e)NA)
-        theta_val[1,]=teste
-        -sum(dnorm(resposta,gerar_mu(theta_val,data),sqrt(Matrix::diag(gerar_sigma(theta_val,data))),log = T))},
-        method="Brent",lower=0,upper=1)$par
-
-
+      suppressWarnings(expr={
+        kappa=optim(0.5,function(par){
+          # teste = tryCatch(expr={
+          #   (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
+          teste = tryCatch(expr={
+            (unlist(theta_atual) + par[1]*(inv_fisher %*% score))[,1]},error=function(e)NA)
+          theta_val[1,]=teste
+          -sum(dnorm(resposta,gerar_mu(theta_val,data),sqrt(Matrix::diag(gerar_sigma(theta_val,data))),log = T))},
+          method="Brent",lower=0,upper=1)$par
+        })
       theta_val_novo = tryCatch(expr={
         (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = kappa))[,1]},
-                                error=function(e)NA)
+        error=function(e)NA)
       }
 
 
@@ -380,18 +391,14 @@ reg_general=function(formula=NULL,
   corrigido=NA
   if(bias_correction){
     bias=correcao_vies()
-    # theta_val[1,]=theta_val_novo-bias[,1]
-    # theta_val_novo=unlist(theta_val[1,])
-    # media=gerar_mu(theta_val,data)
-    # sigma=gerar_sigma(theta_val,data)
-    corrigido=theta_val_novo-bias[,1]
+    corrigido=theta_val-bias[,1]
     corrigido=unlist(corrigido)
   }
 
-if(is.null(names(theta_val_novo))) names(theta_val_novo)= theta
+if(is.null(names(theta_val))) names(theta_val)= theta
 
   out <- list(
-    parameters=theta_val_novo,
+    parameters=unlist(theta_val),
     corrected_parameters=corrigido,
     fitted.values = media,
     residuals = resposta-media,
@@ -480,14 +487,18 @@ coef.genReg <- function(x, ...){
 
 #' @method predict genReg
 #' @export
-predict.genReg <- function(x, newdata=NULL, type = "mean", ...){
+predict.genReg <- function(x, newdata=NULL, type = "mean", bias_correction = NULL, ...){
+  if(is.null(bias_correction)) bias_correction=x$inputs$bias_correction
   if(!type %in% c("mean","var")) stop("type must be 'mean' or 'var'",call. = FALSE)
   parameters=sapply(x$parameters,list)
+  if(bias_correction){
+    if(is.na(x$corrected_parameters[1])) stop("Corrected parameters not founded",call. = F)
+    parameters=sapply(x$corrected_parameters,list)}
   if(type == "mean"){
-    if(is.null(newdata)) return(x$fitted.values)
+    if(is.null(newdata)) newdata=x$data
     return(x$function_mu(parameters,newdata))}
   if(type == "var")
-    if(is.null(newdata)) return(Matrix::diag(x$var))
+    if(is.null(newdata)) newdata=x$data
   return(Matrix::diag(x$function_sigma(parameters,newdata)))
 }
 

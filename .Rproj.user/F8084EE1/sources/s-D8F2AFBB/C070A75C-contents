@@ -1,17 +1,54 @@
 BD<- read.table('C:\\Users\\andrecp\\Dropbox\\Andre-Casagrandi\\Algoritmos\\dados.txt', header=T)
 BD$y <- BD$y/1000
 
-BD=BD[-c(1:2,9),]
-
 plot(BD, pch=19)
 f0 = function(x) 0.44 + 7.55/(1+0.13*x^0.96)
 curve(f0, add=TRUE)
 
-fit0=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD,
+BD0=BD %>% dplyr::mutate(x=ifelse(x==0,0.1,x))
+
+
+fit0=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD0,
                  bias_correction = T,  
                  start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=5),
                  method="NR",
-                 control=list(reltol = 3e-2, max_it = 5000,verbose=1, kappa='AUTO'))
+                 control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
+
+BD1=BD[-c(1:2),]
+fit1=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD1,
+                 bias_correction = T,  
+                 start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=5),
+                 method="NR",
+                 control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
+
+fit2=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD1,
+                 bias_correction = T,  
+                 start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=5),
+                 method="optim",
+                 control=list(reltol = 1e-5, max_it = 5000,verbose=100, kappa='AUTO'))
+
+fit3=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD1,
+                 bias_correction = T,  
+                 start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=5),
+                 method="pso",
+                 control=list(reltol = 1e-5, max_it = 10000,verbose=250, kappa='AUTO'))
+
+fit4=reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD1,
+                 bias_correction = T,  
+                 start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=-1.16714901),
+                 method=NA,
+                 control=list(reltol = 1e-5, max_it = 10000,verbose=250, kappa='AUTO'))
+
+BD1 %>% dplyr::mutate(NR=fit1$fitted.values,
+                      optim=fit2$fitted.values,
+                      pso=fit3$fitted.values,
+                      nenhum=fit4$fitted.values,
+                      corrigido=predict(fit1)) %>%
+  ggplot(aes(y=y,x=x)) +geom_point()+
+  geom_line(aes(y=optim),col=2)+
+  geom_line(aes(y=pso),col=3)+
+  geom_line(aes(y=nenhum),col=4)+
+  geom_line(aes(y=corrigido),col=4)
 
 plot(BD, pch=19)
 f0 = function(x) 0.44 + 7.55/(1+0.13*x^0.96)
