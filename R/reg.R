@@ -36,7 +36,7 @@ reg_general=function(formula=NULL,
                    start=NULL,
                    method="NR",
                    control=list(reltol=0.0001,max_it=500,kappa="AUTO",verbose=0),
-                   bias_correction=F){
+                   bias_correction=T){
 
   if(is.null(formula)){
     stop('arguments "formula" is missing, with no default',call. = F)}
@@ -59,8 +59,8 @@ reg_general=function(formula=NULL,
     if(control$kappa!="AUTO")
       stop('kappa must be numeric or "AUTO"',call. = F)
   if(!is.na(method))
-    if(!method %in% c("pso","optim","NR"))
-      stop('method should be one of "NR", "pso", "optim"',call. = F)
+    if(!method %in% c("pso","optim","NR","gamlss"))
+      stop('method should be one of "NR", "pso", "optim","gamlss"',call. = F)
   if(is.na(method)) method="NONE"
   if(is.null(control$reltol)) control$reltol=0.0001
   if(is.null(control$max_it)) control$max_it=500
@@ -69,9 +69,9 @@ reg_general=function(formula=NULL,
 
   inputs = list(formula=formula,formula_var=formula_var,control=control,start=start,bias_correction=bias_correction)
 
-    resposta=data[,as.character(formula)[2]]
-    mu=as.character(formula)[3]
-    S=tail(as.character(formula_var),1)
+  resposta=data[,as.character(formula)[2]]
+  mu=as.character(formula)[3]
+  S=tail(as.character(formula_var),1)
 
   cl <- match.call()
   n=nrow(data)
@@ -261,6 +261,7 @@ reg_general=function(formula=NULL,
   loglike_sim=array()
   erros=array()
   interacao=list()
+  dif=NA
   if(!is.null(start))
     start= unlist(start,use.names = F)
   if(is.null(start))
@@ -287,7 +288,23 @@ reg_general=function(formula=NULL,
     theta_val_novo = logit(opt$par)
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=logit(opt$par),nome=theta) %>% tidyr::spread(nome,valor)
-    dif=NA
+  }
+  if(method=="gamlss"){
+    mu_names = theta[stringr::str_detect(mu,theta)]
+    sigma_names = theta[stringr::str_detect(S,theta)]
+    suppressWarnings(expr={
+      fit = gamlss.nl::nlgamlss(y=eval(parse(text=as.character(formula)[2])),
+                                mu.formula=formula,
+                                sigma.formula=formula_var,
+                                mu.start = start[stringr::str_detect(mu,theta)],
+                                sigma.start = start[stringr::str_detect(S,theta)],
+                                family=gamlss.dist::gamlss.family(NO(sigma.link="identity")),
+                                data=data)
+    })
+    k=fit$iter
+    theta_val_novo = fit$coefficients
+    names(theta_val_novo)=theta
+    theta_val=data.frame(valor=fit$coefficients,nome=theta) %>% tidyr::spread(nome,valor)
   }
   if(method=="optim"){
     opt = optim(unlist(theta_val),
@@ -303,7 +320,6 @@ reg_general=function(formula=NULL,
     theta_val_novo = opt$par
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=opt$par,nome=theta) %>% tidyr::spread(nome,valor)
-    dif=NA
   }
   if(method=="NR"){
     k=1
@@ -350,9 +366,10 @@ reg_general=function(formula=NULL,
 
     interacao[[k]]=theta_val_novo
     k=k+1
-    dif=max(abs(theta_val-theta_val_novo)/abs(theta_val))
-    erros[k-1]=mean((media-resposta)^2)
-    theta_val[1,]=theta_val_novo
+    dif = max(abs(theta_val-theta_val_novo)/abs(theta_val))
+    dif = ifelse(is.infinite(dif),1,dif)
+    erros[k-1] = mean((media-resposta)^2)
+    theta_val[1,] = theta_val_novo
 
     if(control$verbose>0 & (k %% control$verbose)==0 & control$kappa=="AUTO")
       cat(paste0("It ",k,
