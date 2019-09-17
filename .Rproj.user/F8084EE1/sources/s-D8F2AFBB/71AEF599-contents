@@ -28,8 +28,8 @@ curve(f, add=TRUE)
 #Estimação via reg_general
 ##################
 
-fit=reg_general(Y~exp(beta1+beta2*X),~exp(sigma1+sigma2*X),data=data,
-                             start = list(beta1=0.2,beta2=0.01,sigma1=2,sigma2=0.01),
+fit1=reg_general(Y~exp(beta1+beta2*X),~exp(sigma1+sigma2*X),data=data,
+                             start = list(beta1=0.2,beta2=0.01,sigma1=11,sigma2=0.01),
                              bias_correction = T,
                              method="NR",
                              control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=10))
@@ -49,7 +49,7 @@ teste=generalReg::likelihood_ratio(fit,list(beta2=0.01),correction = T)
 
 
 ################
-#Aplicação
+#Aplicação 1
 ################
 
 BD<- read.table('dados.txt', header=T)
@@ -80,5 +80,26 @@ coef2 = as.numeric(fit0$corrected_parameters[1:4])
 f2 = function(x) coef2[1] + coef2[2]/(1+coef2[3]*x^(coef2[4]))
 curve(f2, add=TRUE, col="blue2")
 
+################
+#Aplicação 2
+################
+
+BD <- read.table('Moinho-de-vento.dat', header=TRUE)
+attach(BD)
+
+
+fit1=reg_general(y~log(b0 +b1*x)/log(b2),~exp(sigma1+sigma2*x),data=BD,
+                             start = list(b0=-1.352,b1=1.188,b2=exp(1),sigma1=log(0.3458872),sigma2=0.01),
+                             bias_correction = T,
+                             method="NR",
+                             control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=10))
+
+plot(y~x)
+coef = fit1$parameters
+f = function(x) log(coef[1] +coef[2]*x)/log(coef[3])
+curve(f,add=TRUE)
+
+
+teste=generalReg::likelihood_ratio(fit1,list(b2=exp(1)),correction = T)
 
 

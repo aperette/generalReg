@@ -15,12 +15,17 @@ fit0=generalReg::reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data
                  method="NR",
                  control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
 
+as.gamlss.family = gamlss.dist::as.gamlss.family
+NO2 = gamlss.dist::as.gamlss.family
 
 fit.gam = gamlss.nl::nlgamlss(y=eval(parse(text = "y")),data=BD,
                               mu.formula=y~beta0 + beta1/(1+beta2*x^beta3),
                               sigma.formula = ~exp(sigma0),
                               mu.start = c(0.44,7.55,0.13,0.96),sigma.start = 5,
-                              family=NO(sigma.link="identity"))
+                              control=gamlss.nl::NL.control(iterlim=100,steptol=1e-05,gradtol = 1e-05,print.level=1),
+                              #llik.output = T,
+                              family=gamlss.dist::NO2(sigma.link="identity"),
+                              )
 
 fit.gam2=generalReg::reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD,
                              bias_correction = T,  

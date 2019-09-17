@@ -61,6 +61,11 @@ reg_general=function(formula=NULL,
   if(!is.na(method))
     if(!method %in% c("pso","optim","NR","gamlss"))
       stop('method should be one of "NR", "pso", "optim","gamlss"',call. = F)
+  class0=class(data)
+  if(class0!="data.frame"){
+    data = tryCatch(expr=as.data.frame(data), error=function(e) NA)
+    if(class(data)!="data.frame")
+      stop("Cannot coerce class '", class0,"' to a data.frame",call. = F)}
   if(is.na(method)) method="NONE"
   if(is.null(control$reltol)) control$reltol=0.0001
   if(is.null(control$max_it)) control$max_it=500
@@ -290,15 +295,20 @@ reg_general=function(formula=NULL,
     theta_val=data.frame(valor=logit(opt$par),nome=theta) %>% tidyr::spread(nome,valor)
   }
   if(method=="gamlss"){
+
     mu_names = theta[stringr::str_detect(mu,theta)]
     sigma_names = theta[stringr::str_detect(S,theta)]
     suppressWarnings(expr={
+      require(gamlss.dist,quietly = T)
       fit = gamlss.nl::nlgamlss(y=eval(parse(text=as.character(formula)[2])),
                                 mu.formula=formula,
                                 sigma.formula=formula_var,
                                 mu.start = start[stringr::str_detect(mu,theta)],
                                 sigma.start = start[stringr::str_detect(S,theta)],
-                                family=gamlss.dist::gamlss.family(NO(sigma.link="identity")),
+                                control=gamlss.nl::NL.control(iterlim=control$max_it,steptol=control$reltol,
+                                                             gradtol = control$reltol),
+                                llik.output = control$verbose>0,
+                                family=gamlss.dist::gamlss.family(NO2(sigma.link="identity")),
                                 data=data)
     })
     k=fit$iter
@@ -338,6 +348,7 @@ reg_general=function(formula=NULL,
     loglike_sim[k]=sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T))
 
     if(is.numeric(control$kappa)){
+      kappa=control$kappa
       Sn=gerar_s(media,sigma,theta_val)
       # theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
       #                         error=function(e)NA)
@@ -368,18 +379,19 @@ reg_general=function(formula=NULL,
     k=k+1
     dif = max(abs(theta_val-theta_val_novo)/abs(theta_val))
     dif = ifelse(is.infinite(dif),1,dif)
+    dif = min(dif,kappa)
     erros[k-1] = mean((media-resposta)^2)
     theta_val[1,] = theta_val_novo
 
     if(control$verbose>0 & (k %% control$verbose)==0 & control$kappa=="AUTO")
       cat(paste0("It ",k,
-                 ": log-likelihood=",round(-loglike_sim[k-1],2),
+                 ": log-likelihood=",round(loglike_sim[k-1],2),
                  " dif=",formatC(dif,format = "e", digits = 2),
                  ", kappa=",round(kappa,3),"\n"))
 
     if(control$verbose>0 & (k %% control$verbose)==0 & is.numeric(control$kappa))
       cat(paste0("It ",k,
-                 ": log-likelihood=",round(-loglike_sim[k-1],2),
+                 ": log-likelihood=",round(loglike_sim[k-1],2),
                  " dif=",formatC(dif,format = "e", digits = 2),"\n"))
 
 
