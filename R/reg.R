@@ -648,8 +648,14 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   rho=p1*p2[1,1]/(p3*p4[1,1])
   LR2=LR-2*log(rho)
 
-  if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0) + (LR2<0))>0)
+  if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
     warning("Negative values are founded in Skovgaard's correction",call. = F)
+
+  if(LR2<0){
+    LR2=LR*(1-1/LR*log(rho))^2
+    warning("Correção quadrática utilizada",call. = F)
+  }
+
   pv2=tryCatch(pchisq(LR2,df = q,lower.tail = F), error=function(e) NA)
 
 
