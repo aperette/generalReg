@@ -83,6 +83,7 @@ reg_general=function(formula=NULL,
   q=1
   par=definir_parametros(c(mu,S),data)
   covar=par[[1]]
+  data = data %>% dplyr::select_(.dots=c(as.character(formula)[2],"covar"))
   if(is.null(start)){
     theta=par[[2]]
   }else{
@@ -436,11 +437,11 @@ if(is.null(names(theta_val))) names(theta_val)= theta
     score = Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,all=F),
     fisher = Matrix::t(Fn)%*%Hn%*%Fn,
     fisher_obs = -1*obs,
-    loglike = sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T)),
+    loglike = -sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T)),
     target=resposta,
     epsilon=dif,
     theta=theta_val[1,],
-    loglike_steps=loglike_sim,
+    functions=list(
     function_loglike=log_like,
     function_mu = gerar_mu,
     function_sigma = gerar_sigma,
@@ -452,7 +453,7 @@ if(is.null(names(theta_val))) names(theta_val)= theta
     function_V=gerar_V,
     function_G=gerar_G,
     function_C=gerar_C,
-    function_D2=gerar_D2,
+    function_D2=gerar_D2),
     inputs = inputs,
     data = data,
     call = cl
@@ -514,6 +515,62 @@ coef.genReg <- function(x, ...){
   x$parameters
 }
 
+#' @method confint genReg
+#' @export
+confint.genReg <- function(x, level=0.95, bias_correction = "both",...){
+  if(bias_correction=="both")
+    bias_correction=NULL
+  flag_null=is.null(bias_correction)
+  if(is.null(bias_correction))
+    bias_correction=x$inputs$bias_correction
+
+  normal_int=conf_interval(x,x$parameters, level)
+  if(bias_correction){
+    if(is.na(x$corrected_parameters[1])) stop("Corrected parameters not founded",call. = F)
+    bias_int=conf_interval(x,x$corrected_parameters, level)}
+
+  if(bias_correction==FALSE){
+    return(normal_int)
+  }
+  if(bias_correction==TRUE & flag_null==FALSE){
+    return(bias_int)
+  }
+  return(list(EMV_intervals=normal_int,corrected_intervals=bias_int))
+}
+
+#' @method vcov genReg
+#' @export
+vcov.genReg <- function(x, bias_correction="both", tolerance=1e-20,...){
+  if(bias_correction=="both")
+    bias_correction=NULL
+  flag_null=is.null(bias_correction)
+  if(is.null(bias_correction))
+    bias_correction=x$inputs$bias_correction
+
+  normal_fisher=Matrix::solve(fisher_inf(x,x$parameters),tol = tolerance)
+  if(bias_correction){
+    if(is.na(x$corrected_parameters[1])) stop("Corrected parameters not founded",call. = F)
+    bias_fisher=Matrix::solve(fisher_inf(x,x$corrected_parameters),tol=tolerance)}
+
+  if(bias_correction==FALSE){
+    return(normal_fisher)
+  }
+  if(bias_correction==TRUE & flag_null==FALSE){
+    return(bias_fisher)
+  }
+  return(list(vcov=normal_fisher,corrected_vcov=bias_fisher))
+
+}
+
+#' @method logLik genReg
+#' @export
+logLik.genReg <- function(x, bias_correction=FALSE, ...){
+  if(bias_correction){
+    if(is.na(x$corrected_parameters[1])) stop("Corrected parameters not founded",call. = F)
+    return(-x$functions$function_loglike(x$corrected_parameters,x$data))}
+  return(x$loglike)
+}
+
 #' @method predict genReg
 #' @export
 predict.genReg <- function(x, newdata=NULL, type = "mean", bias_correction = NULL, ...){
@@ -525,10 +582,10 @@ predict.genReg <- function(x, newdata=NULL, type = "mean", bias_correction = NUL
     parameters=sapply(x$corrected_parameters,list)}
   if(type == "mean"){
     if(is.null(newdata)) newdata=x$data
-    return(x$function_mu(parameters,newdata))}
+    return(x$functions$function_mu(parameters,newdata))}
   if(type == "var")
     if(is.null(newdata)) newdata=x$data
-  return(Matrix::diag(x$function_sigma(parameters,newdata)))
+  return(Matrix::diag(x$functions$function_sigma(parameters,newdata)))
 }
 
 #' @export
@@ -579,8 +636,8 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
 
   mu=x$fitted.values
   var=Matrix::diag(x$var)
-  mu0=x$function_mu(par_teste,x$data)
-  var0=Matrix::diag(x$function_sigma(par_teste,x$data))
+  mu0=x$functions$function_mu(par_teste,x$data)
+  var0=Matrix::diag(x$functions$function_sigma(par_teste,x$data))
   y=x$target
 
   l1=loglike(y,mu,var)
@@ -598,45 +655,45 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   z0=z+mu-mu0
   u0=(z0^2)/var0
   P=sqrt(var)
-  P0=Matrix::diag(x$function_sigma(par_teste,x$data))^0.5
-  Pd=0.5*diag(1/sqrt(var))%*%x$function_V(theta,data)
+  P0=Matrix::diag(x$functions$function_sigma(par_teste,x$data))^0.5
+  Pd=0.5*diag(1/sqrt(var))%*%x$functions$function_V(theta,data)
   a=(y-x$fitted.values)/P
   u00=(a^2)*(P0^2)/var0
 
-  T=x$function_D(theta,data)+z*x$function_V(theta,data)/var
-  T00=x$function_D(par_teste,data)+a*P0*x$function_V(par_teste,data)/var0
+  T=x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
+  T00=x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
 
-  B=-z*x$function_D(theta,data) -0.5*x$function_V(theta,data)
-  B00=-a*P0*x$function_D(par_teste,data) -0.5*x$function_V(par_teste,data)
-  A=-x$function_V(theta,data)/var^2
-  A0=-x$function_V(par_teste,data)/var0^2
+  B=-z*x$functions$function_D(theta,data) -0.5*x$functions$function_V(theta,data)
+  B00=-a*P0*x$functions$function_D(par_teste,data) -0.5*x$functions$function_V(par_teste,data)
+  A=-x$functions$function_V(theta,data)/var^2
+  A0=-x$functions$function_V(par_teste,data)/var0^2
 
   aux1=rep(1:length(theta),length(theta))
   aux2=rep(1:length(theta),each=length(theta))
-  Ad = -2*A[,aux1]*x$function_V(theta,data)[,aux2]/var
-  Ad = Ad - x$function_C(theta,data)/var^2
-  Ad0 = -2*A0[,aux1]*x$function_V(par_teste,data)[,aux2]/var0
-  Ad0 = Ad0 - x$function_C(par_teste,data)/var0^2
+  Ad = -2*A[,aux1]*x$functions$function_V(theta,data)[,aux2]/var
+  Ad = Ad - x$functions$function_C(theta,data)/var^2
+  Ad0 = -2*A0[,aux1]*x$functions$function_V(par_teste,data)[,aux2]/var0
+  Ad0 = Ad0 - x$functions$function_C(par_teste,data)/var0^2
 
-  E = -0.5*(Ad*(var-z^2)) - x$function_D2(theta,data)*z/var
-  E00 = -0.5*(Ad0*(var0-(a*P0)^2)) - x$function_D2(par_teste,data)*a*P0/var0
+  E = -0.5*(Ad*(var-z^2)) - x$functions$function_D2(theta,data)*z/var
+  E00 = -0.5*(Ad0*(var0-(a*P0)^2)) - x$functions$function_D2(par_teste,data)*a*P0/var0
   G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
   G00 = apply(B00[,aux1]*A0[,aux2] + E00,2,sum) %>% matrix(nrow=length(theta))
 
-  R = Pd*a + x$function_D(theta,data)
+  R = Pd*a + x$functions$function_D(theta,data)
 
-  Q = x$function_D(theta,data)+z*x$function_V(theta,data)/var
-  Q00 = x$function_D(par_teste,data)+a*P0*x$function_V(par_teste,data)/var0
-  #Q00 = x$function_D(par_teste,data)+z0*x$function_V(par_teste,data)/var0
+  Q = x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
+  Q00 = x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
+  #Q00 = x$functions$function_D(par_teste,data)+z0*x$functions$function_V(par_teste,data)/var0
 
 
-  Ud0 = Matrix::t(Q00)%*%solve(x$function_sigma(par_teste,data))%*%R
-  U0= Matrix::t(x$function_F(par_teste,data)) %*% x$function_H(x$function_sigma(par_teste,data)) %*% x$function_s(mu0,x$function_sigma(par_teste,data),par_teste,all = F)
-  J00 = Matrix::t(T00)%*%solve(x$function_sigma(par_teste,data))%*%x$function_D(par_teste,data) + G00
-  J = Matrix::t(T)%*%solve(x$var)%*%x$function_D(theta,data) + G
+  Ud0 = Matrix::t(Q00)%*%solve(x$functions$function_sigma(par_teste,data))%*%R
+  U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(x$functions$function_sigma(par_teste,data)) %*% x$functions$function_s(mu0,x$functions$function_sigma(par_teste,data),par_teste,all = F)
+  J00 = Matrix::t(T00)%*%solve(x$functions$function_sigma(par_teste,data))%*%x$functions$function_D(par_teste,data) + G00
+  J = Matrix::t(T)%*%solve(x$var)%*%x$functions$function_D(theta,data) + G
 
   ld = Matrix::t(R)%*%solve(x$var)%*%(-z)
-  ld0 = Matrix::t(R)%*%solve(x$function_sigma(par_teste,data))%*%(-z0)
+  ld0 = Matrix::t(R)%*%solve(x$functions$function_sigma(par_teste,data))%*%(-z0)
 
   w=which(!names(theta) %in% names(parameters))
 
@@ -649,7 +706,8 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   LR2=LR-2*log(rho)
 
   if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
-    warning("Negative values are founded in Skovgaard's correction",call. = F)
+    stop("Negative values are founded in Skovgaard's correction",call. = F)
+
 
   if(LR2<0){
     LR2=LR*(1-1/LR*log(rho))^2

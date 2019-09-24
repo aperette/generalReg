@@ -52,6 +52,10 @@ teste=generalReg::likelihood_ratio(fit,list(beta2=0.01),correction = T)
 #Aplicação 1
 ################
 
+devtools::install_github("aperette/generalReg", force=TRUE)
+
+require('generalReg')
+
 BD<- read.table('dados.txt', header=T)
 BD$y <- BD$y/1000
 BD[1:2,1]<-0.01
@@ -81,25 +85,72 @@ f2 = function(x) coef2[1] + coef2[2]/(1+coef2[3]*x^(coef2[4]))
 curve(f2, add=TRUE, col="blue2")
 
 ################
-#Aplicação 2
+#Aplicação 2 (usar no artigo.)
 ################
 
-BD <- read.table('Moinho-de-vento.dat', header=TRUE)
+devtools::install_github("aperette/generalReg", force=TRUE)
+
+require('generalReg')
+
+BD <- read.table('~/Dropbox/Orientacao/Mestrados/Andre-Casagrandi/Algoritmos/Moinho-de-vento.dat', header=TRUE)
 attach(BD)
 
 
-fit1=reg_general(y~log(b0 +b1*x)/log(b2),~exp(sigma1+sigma2*x),data=BD,
-                             start = list(b0=-1.352,b1=1.188,b2=exp(1),sigma1=log(0.3458872),sigma2=0.01),
+fit1=reg_general(y~log(b0 +b1*x,b2),~exp(sigma1+sigma2*x),data=BD,
+                             start = list(b0=-1.352,b1=1.188,b2=exp(1),sigma1=log(0.3458872),sigma2=0.0),
                              bias_correction = T,
                              method="NR",
-                             control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=10))
+                             control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=0))
 
 plot(y~x)
 coef = fit1$parameters
 f = function(x) log(coef[1] +coef[2]*x)/log(coef[3])
 curve(f,add=TRUE)
 
+#O teste corrigida muda de conclusão
+teste1=generalReg::likelihood_ratio(fit1,list(b2=exp(1)),correction = T)
 
-teste=generalReg::likelihood_ratio(fit1,list(b2=exp(1)),correction = T)
+#Sgima2=0
+teste2=generalReg::likelihood_ratio(fit1,list(sigma2=0),correction = T)
+
+
+
+##Simulações para a aplicação 2
+n = 25
+N=1000
+A = B = matrix(0, N,5)
+T1  = matrix(0, N,2)
+
+for(j in 1:N){
+	e = sqrt(exp(coef[4]+ coef[5]))*rnorm(n)
+	f = function(x) log(coef[1] +coef[2]*x)/log(coef[3])
+	Y = f(BD$x) + e
+	BD.SM = data.frame(y=Y,x=x)
+	fit.SM =reg_general(y~log(b0 +b1*x,b2),~exp(sigma1+sigma2*x),data=BD.SM,
+                             start = list(b0=-1.352,b1=1.188,b2=exp(1),sigma1=log(0.3458872),sigma2=0.0),
+                             bias_correction = T,
+                             method="NR",
+                             control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=0))
+	#O teste corrigida muda de conclusão
+	teste1=generalReg::likelihood_ratio(fit.SM,list(b2=coef[3]),correction = T)$p_value_correction
+
+	#Sgima2=0
+	teste2=generalReg::likelihood_ratio(fit.SM,list(sigma2=coef[5]),correction = T)$p_value_correction
+	coef.SM  = fit.SM$parameters
+	coef1.SM =  fit.SM$corrected_parameters
+	A[j,]<- coef.SM
+	B[j,]<- coef1.SM
+	T1[j,] <- c(teste1,teste2)
+	print(j)
+	}
+
+
+
+
+plot(y ~x)
+
+
+#EA2 2020
+
 
 

@@ -13,30 +13,6 @@ definir_parametros = function(char,data){
   return(list(covar=covar,parametros=parametros))
 }
 
-conf_interval = function(x, c, level=0.95){
-  par=sapply(c,list)
-  mF=x$functions$function_F(par,x$data)
-  H=x$functions$function_H(x$functions$function_sigma(par,x$data))
-  fisher=Matrix::t(mF)%*%H%*%mF
-  m=sqrt(Matrix::diag(solve(x$fisher)))
-  p=(1+level)/2
-  z=qnorm(p)
-  int=matrix(c(c-m*z,c+m*z),nrow=length(c))
-  rownames(int)=names(x$theta)
-  colnames(int)=c(paste0(100*(1-p)," %"),paste0(100*(p)," %"))
-  return(int)
-}
-
-fisher_inf = function(x, c){
-  par=sapply(c,list)
-  mF=x$functions$function_F(par,x$data)
-  H=x$functions$function_H(x$functions$function_sigma(par,x$data))
-  fisher=Matrix::t(mF)%*%H%*%mF
-  rownames(m)=names(par)
-  colnames(m)=names(par)
-  return(fisher)
-}
-
 estruturar = function(char,lista,asArray=F){
   c0=list()
   c0$ori=c("log","exp","sqrt","sen","cos") %>% {.[order(nchar(.),decreasing = T)]}

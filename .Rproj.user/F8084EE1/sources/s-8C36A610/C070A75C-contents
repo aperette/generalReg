@@ -1,44 +1,11 @@
+BD.SM <- read.table('C:/Users/andrecp/Desktop/Dados.Prob.txt', header=TRUE)
+fit.SM =reg_general(y~log(b0 +b1*x,b2),~exp(sigma1+sigma2*x),data=BD.SM,
+                    start = list(b0=-1.352,b1=1.188,b2=exp(1),sigma1=log(0.3458872),sigma2=0.0),
+                    bias_correction = T,
+                    method="NR",
+                    control=list(reltol = 1e-10, max_it = 5000,kappa='AUTO',verbose=10))
 
-BD<- read.table('C:\\Users\\andrecp\\Dropbox\\Andre-Casagrandi\\Algoritmos\\dados.txt', header=T)
-BD$y <- BD$y/1000
+teste1=generalReg::likelihood_ratio(fit.SM,list(b2=3.45807),correction = T)
 
-plot(BD, pch=19)
-f0 = function(x) 0.44 + 7.55/(1+0.13*x^0.96)
-curve(f0, add=TRUE)
+teste2=generalReg::likelihood_ratio(fit.SM,list(sigma2=0.07186729),correction = T)
 
-BD[1:2,1]<-0.01
-
-
-fit0=generalReg::reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD,
-                 bias_correction = T,  
-                 start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=0),
-                 method="NR",
-                 control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
-
-as.gamlss.family = gamlss.dist::as.gamlss.family
-NO2 = gamlss.dist::as.gamlss.family
-
-fit.gam = gamlss.nl::nlgamlss(y=eval(parse(text = "y")),data=BD,
-                              mu.formula=y~beta0 + beta1/(1+beta2*x^beta3),
-                              sigma.formula = ~exp(sigma0),
-                              mu.start = c(0.44,7.55,0.13,0.96),sigma.start = 5,
-                              control=gamlss.nl::NL.control(iterlim=100,steptol=1e-05,gradtol = 1e-05,print.level=1),
-                              #llik.output = T,
-                              family=gamlss.dist::NO2(sigma.link="identity"),
-                              )
-
-fit.gam2=generalReg::reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD,
-                             bias_correction = T,  
-                             start = list(beta0=0.4350199, beta1 = 7.5728349,beta2=0.1342594,beta3=0.9537334,sigma0=-0.5892216),
-                             method=NA,
-                             control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
-
-fit.gam3=generalReg::reg_general(y~beta0 + beta1/(1+beta2*x^beta3),~exp(sigma0),data=BD,
-                             bias_correction = T,  
-                             start = list(beta0=0.44, beta1 = 7.55,beta2=0.13,beta3=0.96,sigma0=5),
-                             method="gamlss",
-                             control=list(reltol = 1e-5, max_it = 5000,verbose=1, kappa='AUTO'))
-
-fit.lm= lm(disp~mpg,data=mtcars)
-fit.gr = generalReg::reg_general(disp~alfa+beta*mpg,~sigma,data=mtcars)
-fit.gam = gamlss::gamlss(disp~mpg,data=mtcars)

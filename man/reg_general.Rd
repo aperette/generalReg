@@ -6,7 +6,7 @@
 \usage{
 reg_general(formula = NULL, formula_var = NULL, data, start = NULL,
   method = "NR", control = list(reltol = 1e-04, max_it = 500, kappa =
-  1, verbose = 1), bias_correction = T, simular = F)
+  "AUTO", verbose = 0), bias_correction = T)
 }
 \arguments{
 \item{formula}{a nonlinear model formula including variables and parameters}
