@@ -4,16 +4,16 @@
     "created" : 1566183832383.000,
     "dirty" : false,
     "encoding" : "UTF-8",
-    "folds" : "519|72|538|0|\n542|72|562|0|\n",
-    "hash" : "4104398845",
+    "folds" : "",
+    "hash" : "1727358613",
     "id" : "B85A9ED5",
-    "lastKnownWriteTime" : 1569360419,
-    "last_content_update" : 1569360419472,
+    "lastKnownWriteTime" : 1569378993,
+    "last_content_update" : 1569378994039,
     "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/reg.R",
     "project_path" : "R/reg.R",
     "properties" : {
-        "cursorPosition" : "569,12",
-        "scrollLine" : "519"
+        "cursorPosition" : "524,29",
+        "scrollLine" : "513"
     },
     "relative_order" : 1,
     "source_on_save" : false,

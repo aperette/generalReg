@@ -31,10 +31,10 @@ fisher_inf = function(x, c){
   par=sapply(c,list)
   mF=x$functions$function_F(par,x$data)
   H=x$functions$function_H(x$functions$function_sigma(par,x$data))
-  fisher=Matrix::t(mF)%*%H%*%mF
+  m=Matrix::t(mF)%*%H%*%mF
   rownames(m)=names(par)
   colnames(m)=names(par)
-  return(fisher)
+  return(m)
 }
 
 estruturar = function(char,lista,asArray=F){

@@ -518,6 +518,8 @@ coef.genReg <- function(x, ...){
 #' @method confint genReg
 #' @export
 confint.genReg <- function(x, level=0.95, bias_correction = "both",...){
+  if(level<=0 | level>=1 | !is.numeric(level))
+    stop("level must be in interval (0,1)",call. = F)
   if(bias_correction=="both")
     bias_correction=NULL
   flag_null=is.null(bias_correction)
