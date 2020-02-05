@@ -387,13 +387,13 @@ reg_general=function(formula=NULL,
     if(control$verbose>0 & (k %% control$verbose)==0 & control$kappa=="AUTO")
       cat(paste0("It ",k,
                  ": log-likelihood=",round(loglike_sim[k-1],2),
-                 " dif=",formatC(dif,format = "e", digits = 2),
+                 " error_max=",formatC(dif,format = "e", digits = 2),
                  ", kappa=",round(kappa,3),"\n"))
 
     if(control$verbose>0 & (k %% control$verbose)==0 & is.numeric(control$kappa))
       cat(paste0("It ",k,
                  ": log-likelihood=",round(loglike_sim[k-1],2),
-                 " dif=",formatC(dif,format = "e", digits = 2),"\n"))
+                 " error_max=",formatC(dif,format = "e", digits = 2),"\n"))
 
 
     if(is.na(dif) | dif>10000000) stop("Non convergence",call. = F)
@@ -453,7 +453,8 @@ if(is.null(names(theta_val))) names(theta_val)= theta
     function_V=gerar_V,
     function_G=gerar_G,
     function_C=gerar_C,
-    function_D2=gerar_D2),
+    function_D2=gerar_D2,
+    function_M2=gerar_M2),
     inputs = inputs,
     data = data,
     call = cl
@@ -686,8 +687,6 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
 
   Q = x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
   Q00 = x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
-  #Q00 = x$functions$function_D(par_teste,data)+z0*x$functions$function_V(par_teste,data)/var0
-
 
   Ud0 = Matrix::t(Q00)%*%solve(x$functions$function_sigma(par_teste,data))%*%R
   U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(x$functions$function_sigma(par_teste,data)) %*% x$functions$function_s(mu0,x$functions$function_sigma(par_teste,data),par_teste,all = F)
@@ -699,8 +698,20 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
 
   w=which(!names(theta) %in% names(parameters))
 
+  #Matriz J0 - Teste
+  media0=x$functions$function_mu(par_teste,x$data)
+  sigma0=x$functions$function_sigma(par_teste,x$data)
+  G2=x$functions$function_G(par_teste,data=x$data)
+  M2=x$functions$function_M2(media0,sigma0)
+  Fn=x$functions$function_F(par_teste,data=x$data)
+  Hn=x$functions$function_H(sigma0)
+  s=x$functions$function_s(media0,sigma0,par_teste,all = F)
+
+  J0 = (Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
+          matrix(t(s) %*% Hn %*% G2,ncol=length(par_teste)))*-1
+
   J00=as.matrix(J00)
-  p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
+  p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J0[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
   p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
   p3=LR^(q/2-1)
   p4=Matrix::t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0

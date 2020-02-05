@@ -1,0 +1,14 @@
+G=gerar_G(theta_val,data)
+M2 = gerar_M2(media,sigma)
+obs = Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
+  matrix(t(gerar_s(media,sigma,theta_val,all = F)) %*% Hn %*% G,ncol=length(theta))
+
+
+G=fit1$functions$function_G(theta,data=fit1$data)
+M2=fit1$functions$function_M2(fit1$fitted.values,fit1$var)
+Fn=fit1$functions$function_F(theta,data=fit1$data)
+Hn=fit1$functions$function_H(fit1$var)
+s=fit1$functions$function_s(fit1$fitted.values,fit1$var,theta,all = F)
+  
+obs = Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
+  matrix(t(s) %*% Hn %*% G,ncol=length(theta))

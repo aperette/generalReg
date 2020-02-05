@@ -1,0 +1,97 @@
+require(insuranceData)
+data(AutoBi)
+#devtools::install_github("aperette/generalReg", force=TRUE)
+require('generalReg')
+require('gamlss')
+AutoBi$ATTORNEY  <- as.factor(AutoBi$ATTORNEY  )
+AutoBi$CLMSEX    <- as.factor( AutoBi$CLMSEX)
+AutoBi$CLMINSUR  <- as.factor( AutoBi$CLMINSUR)
+AutoBi$MARITAL   <- as.factor( AutoBi$MARITAL)
+AutoBi$SEATBELT  <- as.factor( AutoBi$SEATBELT)
+AutoBi <-  na.exclude(AutoBi)
+attach(AutoBi)
+XX = model.matrix(LOSS~ATTORNEY+CLMSEX+CLMINSUR+MARITAL+SEATBELT+CLMAGE)
+BD <- data.frame(Y=log(LOSS),as.matrix(XX))
+
+fit1=generalReg::reg_general(Y ~
+                   beta1+beta2*ATTORNEY2,~exp(sigma1+sigma2*ATTORNEY2 ),data=BD,
+                 start =
+                   list(beta1=0.2,beta2=0.01,sigma1=4,sigma2=0.01),
+                 bias_correction = T,
+                 method="NR",
+                 control=list(reltol = 1e-10, max_it =
+                                5000,kappa='AUTO',verbose=10))
+teste1=generalReg::likelihood_ratio(fit1,list(sigma2=0.0),correction = T)
+
+
+
+N=100
+A = matrix(0,N,2)
+B = list()
+A2 = matrix(0,N,2)
+B2 = list()
+
+# set.seed(125135)
+# sementes=sample(1:1000000,N,replace = F)
+# saveRDS(sementes,"../sementes.RDS")
+sementes=readRDS("../sementes.RDS")
+
+for(i in 1:N){
+  
+  set.seed(sementes[i])
+  Y = XX[,1:2]%*%fit1$parameters[1:2] +
+    sqrt(exp(XX[,1]*fit1$parameters[3])) *rnorm(dim(XX)[1])
+  
+  BD1 = data.frame(Y=Y, as.matrix(XX))
+  
+  #Attorney
+  fit11 =generalReg::reg_general(Y ~
+                                   beta1+beta2*ATTORNEY2,~exp(sigma1+sigma2*ATTORNEY2 ),data=BD1,
+                                 start =
+                                   list(beta1=0.2,beta2=0.01,sigma1=4,sigma2=0.01),
+                                 bias_correction = T,
+                                 method="NR",
+                                 control=list(reltol = 1e-10, max_it =
+                                                5000,kappa='AUTO',verbose=FALSE))
+  teste11 =likelihood_ratio(fit11,list(sigma2=0.0),correction = T)
+  B[[i]] = confint(fit11)
+  A[i,] = c(teste11[[2]],teste11[[4]])
+  teste12 = likelihood_ratio(fit11,list(beta1=fit1$parameters[1],
+                                                   beta2=fit1$parameters[2],
+                                                   sigma1=fit1$parameters[3],
+                                                   sigma2=0.0),correction = T)
+  A2[i,] = c(teste12[[2]],teste12[[4]])
+  
+  print(i)}
+
+saveRDS(list(A=A,A2=A2),"../teste_skov4.RDS")
+#1- atual
+#2- J0=J00
+#3- Trocar a0
+#4- usar funções
+
+
+# results -----------------------------------------------------------------
+
+
+lista = readRDS("../teste_skov.RDS")
+lista1 = readRDS("../teste_skov2.RDS")
+lista2 = readRDS("../teste_skov3.RDS")
+lista3 = readRDS("../teste_skov4.RDS")
+
+A=cbind(lista$A,lista1$A[,2],lista2$A[,2],lista3$A[,2])
+A2=cbind(lista$A2,lista1$A2[,2],lista2$A2[,2],lista3$A2[,2])
+
+par(mfrow=c(1,5))
+hist(A[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")
+hist(A[,2], prob=TRUE,main="P-valor (LR corrigida)", xlab="p-valor")
+hist(A[,3], prob=TRUE,main="P-valor (LR corrigida TESTE)", xlab="p-valor")
+hist(A[,4], prob=TRUE,main="P-valor (LR corrigida TESTE2)", xlab="p-valor")
+hist(A[,5], prob=TRUE,main="P-valor (LR corrigida TESTE3)", xlab="p-valor")
+
+par(mfrow=c(1,5))
+hist(A2[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")
+hist(A2[,2], prob=TRUE,main="P-valor (LR corrigida)", xlab="p-valor")
+hist(A2[,3], prob=TRUE,main="P-valor (LR corrigida TESTE)", xlab="p-valor")
+hist(A2[,4], prob=TRUE,main="P-valor (LR corrigida TESTE2)", xlab="p-valor")
+hist(A2[,5], prob=TRUE,main="P-valor (LR corrigida TESTE3)", xlab="p-valor")
