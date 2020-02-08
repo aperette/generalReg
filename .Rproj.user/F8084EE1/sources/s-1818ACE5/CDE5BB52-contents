@@ -21,7 +21,7 @@ fit1=generalReg::reg_general(Y ~
                  method="NR",
                  control=list(reltol = 1e-10, max_it =
                                 5000,kappa='AUTO',verbose=10))
-teste1=generalReg::likelihood_ratio(fit1,list(sigma2=0.0),correction = T)
+teste1=likelihood_ratio(fit1,list(sigma2=0.0),correction = T)
 
 
 
@@ -64,11 +64,20 @@ for(i in 1:N){
   
   print(i)}
 
-saveRDS(list(A=A,A2=A2),"../teste_skov4.RDS")
+saveRDS(list(A=A,A2=A2),"../teste_skov.RDS")
 #1- atual
 #2- J0=J00
 #3- Trocar a0
 #4- usar funções
+
+par(mfrow=c(2,2))
+hist(A[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")
+hist(A[,2], prob=TRUE,main="P-valor (LR corrigida)", xlab="p-valor")
+
+par(mfrow=c(2,2))
+hist(A2[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")
+hist(A2[,2], prob=TRUE,main="P-valor (LR corrigida)", xlab="p-valor")
+
 
 
 # results -----------------------------------------------------------------
