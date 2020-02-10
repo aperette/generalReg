@@ -70,7 +70,7 @@ saveRDS(list(A=A,A2=A2),"../teste_skov.RDS")
 #3- Trocar a0
 #4- usar funções
 
-par(mfrow=c(2,2))
+par(mfrow=c(1,2))
 hist(A[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")
 hist(A[,2], prob=TRUE,main="P-valor (LR corrigida)", xlab="p-valor")
 

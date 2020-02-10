@@ -601,6 +601,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   formula=Reduce(paste, deparse(x$inputs$formula))
   formula_var=Reduce(paste, deparse(x$inputs$formula_var))
 
+  theta_names = names(x$parameters)
   equals_par = names(parameters)[names(parameters) %in% names(x$parameters)]
   dif_par = names(x$parameters)[!names(x$parameters) %in% equals_par]
   wrong_par = names(parameters)[!names(parameters) %in% names(x$parameters)]
@@ -628,7 +629,9 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
       data=x$data,
       control=control)
     cat(paste(names(coef(x2)),round(coef(x2),3),sep=":",collapse="  "),"\n")
-    par_teste = coef(x2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>% merge(parameters)
+    par_teste = coef(x2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>%
+      merge(parameters) %>%
+      dplyr::select(theta_names)
   }
   loglike=function(y,media,var){
     sum(dnorm(y,mean=media,sqrt(var),log=T))}
