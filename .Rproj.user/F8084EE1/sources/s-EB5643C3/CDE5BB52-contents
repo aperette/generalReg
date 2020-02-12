@@ -21,7 +21,7 @@ fit1=generalReg::reg_general(Y ~
                  method="NR",
                  control=list(reltol = 1e-10, max_it =
                                 5000,kappa='AUTO',verbose=10))
-teste1=likelihood_ratio(fit1,list(sigma2=0.0),correction = T)
+teste=likelihood_ratio(fit1,list(sigma2=0.0),correction = T)
 
 
 
@@ -31,6 +31,8 @@ B = list()
 A2 = matrix(0,N,2)
 B2 = list()
 
+teste1=list()
+teste2=list()
 # set.seed(125135)
 # sementes=sample(1:1000000,N,replace = F)
 # saveRDS(sementes,"../sementes.RDS")
@@ -54,21 +56,25 @@ for(i in 1:N){
                                  control=list(reltol = 1e-10, max_it =
                                                 5000,kappa='AUTO',verbose=FALSE))
   teste11 =likelihood_ratio(fit11,list(sigma2=0.0),correction = T)
+  teste1[[i]]=teste11
   B[[i]] = confint(fit11)
   A[i,] = c(teste11[[2]],teste11[[4]])
   teste12 = likelihood_ratio(fit11,list(beta1=fit1$parameters[1],
                                                    beta2=fit1$parameters[2],
                                                    sigma1=fit1$parameters[3],
                                                    sigma2=0.0),correction = T)
+  teste2[[i]]=teste12
   A2[i,] = c(teste12[[2]],teste12[[4]])
   
   print(i)}
 
-saveRDS(list(A=A,A2=A2),"../teste_skov.RDS")
-#1- atual
-#2- J0=J00
-#3- Trocar a0
-#4- usar funções
+saveRDS(list(teste1,teste2),"../teste_skov.RDS")
+
+
+teste1[[1]]$p1
+teste2[[1]]$p1
+
+
 
 par(mfrow=c(1,2))
 hist(A[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")

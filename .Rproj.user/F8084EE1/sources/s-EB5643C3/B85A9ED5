@@ -5,15 +5,15 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "0",
+    "hash" : "3821782905",
     "id" : "B85A9ED5",
-    "lastKnownWriteTime" : 1581348115,
-    "last_content_update" : 1581348115677,
+    "lastKnownWriteTime" : 1581529369,
+    "last_content_update" : 1581529369349,
     "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/reg.R",
     "project_path" : "R/reg.R",
     "properties" : {
-        "cursorPosition" : "116,2",
-        "scrollLine" : "98"
+        "cursorPosition" : "735,76",
+        "scrollLine" : "730"
     },
     "relative_order" : 1,
     "source_on_save" : false,

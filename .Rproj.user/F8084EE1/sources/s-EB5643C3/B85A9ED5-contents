@@ -641,9 +641,11 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   data=x$data
 
   mu=x$fitted.values
-  var=Matrix::diag(x$var)
+  S=x$var
+  S0=x$functions$function_sigma(par_teste,x$data)
+  var=Matrix::diag(S)
   mu0=x$functions$function_mu(par_teste,x$data)
-  var0=Matrix::diag(x$functions$function_sigma(par_teste,x$data))
+  var0=Matrix::diag(S0)
   y=x$target
 
   l1=loglike(y,mu,var)
@@ -660,56 +662,65 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   z=x$target-x$fitted.values
   z0=z+mu-mu0
   u0=(z0^2)/var0
+  V=x$functions$function_V(theta,data)
+  V0=x$functions$function_V(par_teste,data)
+  D=x$functions$function_D(theta,data)
+  D0=x$functions$function_D(par_teste,data)
+
   P=sqrt(var)
-  P0=Matrix::diag(x$functions$function_sigma(par_teste,x$data))^0.5
-  Pd=0.5*diag(1/sqrt(var))%*%x$functions$function_V(theta,data)
+  P0=var0^0.5
+  Pd=0.5*diag(1/sqrt(var))%*%V
   a=(y-x$fitted.values)/P
   u00=(a^2)*(P0^2)/var0
 
+
   gerar_J=function(theta){
+    V_aux=x$functions$function_V(theta,data)
+    D_aux=x$functions$function_D(theta,data)
     var=Matrix::diag(x$functions$function_sigma(theta,x$data))
     z=x$target-x$functions$function_mu(theta,x$data)
-    T=x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
-    B=-z*x$functions$function_D(theta,data) -0.5*x$functions$function_V(theta,data)
-    A=-x$functions$function_V(theta,data)/var^2
+    T=D_aux+z*V_aux/var
+    B=-z*D_aux -0.5*V_aux
+    A=-V_aux/var^2
     aux1=rep(1:length(theta),length(theta))
     aux2=rep(1:length(theta),each=length(theta))
-    Ad = -2*A[,aux1]*x$functions$function_V(theta,data)[,aux2]/var
+    Ad = -2*A[,aux1]*V_aux[,aux2]/var
     Ad = Ad - x$functions$function_C(theta,data)/var^2
     E = -0.5*(Ad*(var-z^2)) - x$functions$function_D2(theta,data)*z/var
     G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
-    Matrix::t(T)%*%solve(x$var)%*%x$functions$function_D(theta,data) + G
+    Matrix::t(T)%*%solve(x$var)%*%D_aux + G
   }
+
 
   J = gerar_J(theta)
   J0 = gerar_J(par_teste)
 
-  T00=x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
+  T00=D0+a*P0*V0/var0
 
-  B00=-a*P0*x$functions$function_D(par_teste,data) -0.5*x$functions$function_V(par_teste,data)
-  A0=-x$functions$function_V(par_teste,data)/var0^2
+  B00=-a*P0*D0 -0.5*V0
+  A0=-V0/var0^2
 
   aux1=rep(1:length(theta),length(theta))
   aux2=rep(1:length(theta),each=length(theta))
-  Ad0 = -2*A0[,aux1]*x$functions$function_V(par_teste,data)[,aux2]/var0
+  Ad0 = -2*A0[,aux1]*V0[,aux2]/var0
   Ad0 = Ad0 - x$functions$function_C(par_teste,data)/var0^2
 
   E00 = -0.5*(Ad0*(var0-(a*P0)^2)) - x$functions$function_D2(par_teste,data)*a*P0/var0
   G00 = apply(B00[,aux1]*A0[,aux2] + E00,2,sum) %>% matrix(nrow=length(theta))
 
-  J00 = Matrix::t(T00)%*%solve(x$functions$function_sigma(par_teste,data))%*%x$functions$function_D(par_teste,data) + G00
+  J00 = Matrix::t(T00)%*%solve(S0)%*%D0 + G00
   J00=as.matrix(J00)
 
-  R = Pd*a + x$functions$function_D(theta,data)
+  R = Pd*a + D
 
-  Q = x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
-  Q00 = x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
+  Q = D+z*V/var
+  Q00 = D0+a*P0*V0/var0
 
-  Ud0 = Matrix::t(Q00)%*%solve(x$functions$function_sigma(par_teste,data))%*%R
-  U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(x$functions$function_sigma(par_teste,data)) %*% x$functions$function_s(mu0,x$functions$function_sigma(par_teste,data),par_teste,all = F)
+  Ud0 = Matrix::t(Q00)%*%solve(S0)%*%R
+  U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(S0) %*% x$functions$function_s(mu0,S0,par_teste,all = F)
 
   ld = Matrix::t(R)%*%solve(x$var)%*%(-z)
-  ld0 = Matrix::t(R)%*%solve(x$functions$function_sigma(par_teste,data))%*%(-z0)
+  ld0 = Matrix::t(R)%*%solve(S0)%*%(-z0)
 
   w=which(!names(theta) %in% names(parameters))
 
@@ -720,8 +731,9 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   rho=p1*p2[1,1]/(p3*p4[1,1])
   LR2=LR-2*log(rho)
 
-  if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
-    stop("Negative values are founded in Skovgaard's correction",call. = F)
+  #if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
+  if(rho<0){
+    stop("Negative values are founded in Skovgaard's correction",call. = F)}
 
 
   if(LR2<0){

@@ -1,70 +1,68 @@
+#' @export
 likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=NULL){
   if(class(x)!="genReg")
     stop("x must be a genReg class",call. = F)
-
+  
   par_teste=parameters
-
+  
   formula=Reduce(paste, deparse(x$inputs$formula))
   formula_var=Reduce(paste, deparse(x$inputs$formula_var))
-
+  
   theta_names = names(x$parameters)
   equals_par = names(parameters)[names(parameters) %in% names(x$parameters)]
   dif_par = names(x$parameters)[!names(x$parameters) %in% equals_par]
   wrong_par = names(parameters)[!names(parameters) %in% names(x$parameters)]
   if(length(wrong_par)>1) stop(paste0("Parameter ",dif_par[1]," not found"),call. = F)
-
+  
   if(length(equals_par)<length(x$parameters)){
     for(i in 1:length(equals_par)){
       formula=stringr::str_replace_all(formula,equals_par[i],as.character(parameters[[equals_par[i]]]))
       formula_var=stringr::str_replace_all(formula_var,equals_par[i],as.character(parameters[[equals_par[i]]]))
     }
-
+    
     if(!is.null(control$reltol)) x$inputs$control$reltol=control$reltol
     if(!is.null(control$max_it)) x$inputs$control$max_it=control$max_it
     if(!is.null(control$kappa)) x$inputs$control$kappa=control$kappa
     x$inputs$start = x$inputs$start[dif_par]
-    if(!is.null(start)) x$inputs$start=start
+    if(is.null(start)) start=x$inputs$start
     control=x$inputs$control
     control$verbose=0
     cat("MLE under H0:\n")
-
-    x2= generalReg::reg_general(
-        formula=as.formula(formula),
-        formula_var=as.formula(formula_var),
-        start=x$inputs$start,
-        data=x$data,
-        control=control)
+    
+    x2=reg_general(
+      formula=as.formula(formula),
+      formula_var=as.formula(formula_var),
+      start=x$inputs$start,
+      data=x$data,
+      control=control)
     cat(paste(names(coef(x2)),round(coef(x2),3),sep=":",collapse="  "),"\n")
-    par_teste = coef(x2) %>%
-      data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>% merge(parameters) %>% dplyr::select(theta_names)
+    par_teste = coef(x2) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor) %>%
+      merge(parameters) %>%
+      dplyr::select(theta_names)
   }
-
-  return(par_teste)
   loglike=function(y,media,var){
     sum(dnorm(y,mean=media,sqrt(var),log=T))}
   theta=coef(x) %>% data.frame(nome=names(.),valor=.) %>% tidyr::spread(nome,valor)
   p=length(theta)
   q=length(parameters)
   data=x$data
-
+  
   mu=x$fitted.values
   var=Matrix::diag(x$var)
   mu0=x$functions$function_mu(par_teste,x$data)
   var0=Matrix::diag(x$functions$function_sigma(par_teste,x$data))
   y=x$target
-
+  
   l1=loglike(y,mu,var)
   l0=loglike(y,mu0,var0)
-
+  
   LR=2*(l1-l0)
   if(LR<0) stop("Likelihood ratio test statistic is negative",call. = F)
-
+  
   pv=pchisq(LR,df = q,lower.tail = F)
-  w=which(!names(theta) %in% names(parameters))
-  #return(list(q=q,p=p,w=w))
-
+  
   if(correction==FALSE){return(list(LR=LR,p_value=pv))}
-
+  
   ####Skovgaard correction:
   z=x$target-x$fitted.values
   z0=z+mu-mu0
@@ -74,61 +72,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   Pd=0.5*diag(1/sqrt(var))%*%x$functions$function_V(theta,data)
   a=(y-x$fitted.values)/P
   u00=(a^2)*(P0^2)/var0
-
-  T=x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
-  T0=x$functions$function_D(par_teste,data)+z0*x$functions$function_V(par_teste,data)/var0
-  T00=x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
-
-  B=-z*x$functions$function_D(theta,data) -0.5*x$functions$function_V(theta,data)
-  B00=-a*P0*x$functions$function_D(par_teste,data) -0.5*x$functions$function_V(par_teste,data)
-  A=-x$functions$function_V(theta,data)/var^2
-  A0=-x$functions$function_V(par_teste,data)/var0^2
-
-  aux1=rep(1:length(theta),length(theta))
-  aux2=rep(1:length(theta),each=length(theta))
-  Ad = -2*A[,aux1]*x$functions$function_V(theta,data)[,aux2]/var
-  Ad = Ad - x$functions$function_C(theta,data)/var^2
-  Ad0 = -2*A0[,aux1]*x$functions$function_V(par_teste,data)[,aux2]/var0
-  Ad0 = Ad0 - x$functions$function_C(par_teste,data)/var0^2
-
-  E = -0.5*(Ad*(var-z^2)) - x$functions$function_D2(theta,data)*z/var
-  E00 = -0.5*(Ad0*(var0-(a*P0)^2)) - x$functions$function_D2(par_teste,data)*a*P0/var0
-  G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
-  G00 = apply(B00[,aux1]*A0[,aux2] + E00,2,sum) %>% matrix(nrow=length(theta))
-
-  #Teste
-  B0=-z0*x$functions$function_D(par_teste,data) -0.5*x$functions$function_V(par_teste,data)
-  E0 = -0.5*(Ad0*(var0-(z0)^2)) - x$functions$function_D2(par_teste,data)*z0/var0
-  G0 = apply(B0[,aux1]*A0[,aux2] + E0,2,sum) %>% matrix(nrow=length(theta))
-
-
-  R = Pd*a + x$functions$function_D(theta,data)
-
-  Q = x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
-  Q00 = x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
-  #Q00 = x$functions$function_D(par_teste,data)+z0*x$functions$function_V(par_teste,data)/var0
-
-
-  Ud0 = Matrix::t(Q00)%*%solve(x$functions$function_sigma(par_teste,data))%*%R
-  U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(x$functions$function_sigma(par_teste,data)) %*% x$functions$function_s(mu0,x$functions$function_sigma(par_teste,data),par_teste,all = F)
-  J00 = Matrix::t(T00)%*%solve(x$functions$function_sigma(par_teste,data))%*%x$functions$function_D(par_teste,data) + G00
-  J0_1 = Matrix::t(T0)%*%solve(x$functions$function_sigma(par_teste,data))%*%x$functions$function_D(par_teste,data) + G0
-  J_1 = Matrix::t(T)%*%solve(x$var)%*%x$functions$function_D(theta,data) + G
-
-
-
-  #Matriz J0
-  media0=x$functions$function_mu(par_teste,x$data)
-  sigma0=x$functions$function_sigma(par_teste,x$data)
-  G2=x$functions$function_G(par_teste,data=x$data)
-  M2=x$functions$function_M2(media0,sigma0)
-  Fn=x$functions$function_F(par_teste,data=x$data)
-  Hn=x$functions$function_H(sigma0)
-  s=x$functions$function_s(media0,sigma0,par_teste,all = F)
-
-  J0_2 = (Matrix::t(Fn) %*% Hn %*% M2 %*% Hn %*% Fn +
-    matrix(t(s) %*% Hn %*% G2,ncol=length(par_teste)))*-1
-
+  
   gerar_J=function(theta){
     var=Matrix::diag(x$functions$function_sigma(theta,x$data))
     z=x$target-x$functions$function_mu(theta,x$data)
@@ -141,40 +85,61 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
     Ad = Ad - x$functions$function_C(theta,data)/var^2
     E = -0.5*(Ad*(var-z^2)) - x$functions$function_D2(theta,data)*z/var
     G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
-    Matrix::t(T)%*%solve(x$functions$function_sigma(theta,x$data))%*%x$functions$function_D(theta,data) + G
+    Matrix::t(T)%*%solve(x$var)%*%x$functions$function_D(theta,data) + G
   }
-
-  J_2 = gerar_J(theta)
-  J0_3 = gerar_J(par_teste)
-
+  
+  J = gerar_J(theta)
+  J0 = gerar_J(par_teste)
+  
+  T00=x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
+  
+  B00=-a*P0*x$functions$function_D(par_teste,data) -0.5*x$functions$function_V(par_teste,data)
+  A0=-x$functions$function_V(par_teste,data)/var0^2
+  
+  aux1=rep(1:length(theta),length(theta))
+  aux2=rep(1:length(theta),each=length(theta))
+  Ad0 = -2*A0[,aux1]*x$functions$function_V(par_teste,data)[,aux2]/var0
+  Ad0 = Ad0 - x$functions$function_C(par_teste,data)/var0^2
+  
+  E00 = -0.5*(Ad0*(var0-(a*P0)^2)) - x$functions$function_D2(par_teste,data)*a*P0/var0
+  G00 = apply(B00[,aux1]*A0[,aux2] + E00,2,sum) %>% matrix(nrow=length(theta))
+  
+  J00 = Matrix::t(T00)%*%solve(x$functions$function_sigma(par_teste,data))%*%x$functions$function_D(par_teste,data) + G00
+  J00=as.matrix(J00)
+  
+  R = Pd*a + x$functions$function_D(theta,data)
+  
+  Q = x$functions$function_D(theta,data)+z*x$functions$function_V(theta,data)/var
+  Q00 = x$functions$function_D(par_teste,data)+a*P0*x$functions$function_V(par_teste,data)/var0
+  
+  Ud0 = Matrix::t(Q00)%*%solve(x$functions$function_sigma(par_teste,data))%*%R
+  U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(x$functions$function_sigma(par_teste,data)) %*% x$functions$function_s(mu0,x$functions$function_sigma(par_teste,data),par_teste,all = F)
+  
   ld = Matrix::t(R)%*%solve(x$var)%*%(-z)
   ld0 = Matrix::t(R)%*%solve(x$functions$function_sigma(par_teste,data))%*%(-z0)
-
+  
   w=which(!names(theta) %in% names(parameters))
-
-  J00=as.matrix(J00)
-
-  return(list(list(J_1,J_2),list(J0_1,J0_2,J0_3),J00))
+  
   p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J0[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
   p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
   p3=LR^(q/2-1)
   p4=Matrix::t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0
   rho=p1*p2[1,1]/(p3*p4[1,1])
   LR2=LR-2*log(rho)
-
+  
   if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
     stop("Negative values are founded in Skovgaard's correction",call. = F)
-
-
+  
+  
   if(LR2<0){
     LR2=LR*(1-1/LR*log(rho))^2
     warning("Correção quadrática utilizada",call. = F)
   }
-
+  
   pv2=tryCatch(pchisq(LR2,df = q,lower.tail = F), error=function(e) NA)
-
-
-  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2)
+  
+  
+  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2,p1=p1,p2=as.numeric(p2),p3=p3,p4=as.numeric(p4))
   class(out) = "lr_ratio"
   return(out)
 }
