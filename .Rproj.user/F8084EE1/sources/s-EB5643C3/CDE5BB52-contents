@@ -43,6 +43,8 @@ for(i in 1:N){
   set.seed(sementes[i])
   Y = XX[,1:2]%*%fit1$parameters[1:2] +
     sqrt(exp(XX[,1]*fit1$parameters[3])) *rnorm(dim(XX)[1])
+  Y = XX[,1:2]%*%c(1.3,-1.4) +
+    sqrt(exp(XX[,1]*0.3)) *rnorm(dim(XX)[1])
   
   BD1 = data.frame(Y=Y, as.matrix(XX))
   
@@ -55,11 +57,11 @@ for(i in 1:N){
                                  method="NR",
                                  control=list(reltol = 1e-10, max_it =
                                                 5000,kappa='AUTO',verbose=FALSE))
-  teste11 =likelihood_ratio(fit11,list(sigma2=0.0),correction = T)
+  teste11 =likelihood_ratio(fit11,list(sigma2=0),correction = T)
   teste1[[i]]=teste11
   B[[i]] = confint(fit11)
   A[i,] = c(teste11[[2]],teste11[[4]])
-  teste12 = likelihood_ratio(fit11,list(beta1=fit1$parameters[1],
+  teste12 = likelihood_ratio(fit11,list(beta1=1.3,
                                                    beta2=fit1$parameters[2],
                                                    sigma1=fit1$parameters[3],
                                                    sigma2=0.0),correction = T)
@@ -71,10 +73,12 @@ for(i in 1:N){
 saveRDS(list(teste1,teste2),"../teste_skov.RDS")
 
 
-teste1[[1]]$p1
+teste1[[1]]$LR_correction
 teste2[[1]]$p1
 
-
+rho1=teste1 %>% lapply(function(x)data.frame(x[5:8])) %>% dplyr::bind_rows() %>% dplyr::mutate(rho=p1*p2/(p3*p4)) 
+rho2=teste2 %>% lapply(function(x)data.frame(x[5:8])) %>% dplyr::bind_rows() %>% dplyr::mutate(rho=p1*p2/(p3*p4))
+rho1 %>% mutate(p2=rho2$p2,p2=rho2$p4, rho_novo=p1*p2/(p3*p4)) %>% head
 
 par(mfrow=c(1,2))
 hist(A[,1], prob=TRUE,main="P-valor (Sem correção)", xlab="p-valor")

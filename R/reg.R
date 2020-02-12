@@ -640,11 +640,11 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   q=length(parameters)
   data=x$data
 
-  mu=x$fitted.values
-  S=x$var
+  mu=x$functions$function_mu(theta,x$data)
+  mu0=x$functions$function_mu(par_teste,x$data)
+  S=x$functions$function_sigma(theta,x$data)
   S0=x$functions$function_sigma(par_teste,x$data)
   var=Matrix::diag(S)
-  mu0=x$functions$function_mu(par_teste,x$data)
   var0=Matrix::diag(S0)
   y=x$target
 
@@ -659,8 +659,8 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   if(correction==FALSE){return(list(LR=LR,p_value=pv))}
 
   ####Skovgaard correction:
-  z=x$target-x$fitted.values
-  z0=z+mu-mu0
+  z=y-mu
+  z0=y-mu0
   u0=(z0^2)/var0
   V=x$functions$function_V(theta,data)
   V0=x$functions$function_V(par_teste,data)
@@ -670,15 +670,16 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   P=sqrt(var)
   P0=var0^0.5
   Pd=0.5*diag(1/sqrt(var))%*%V
-  a=(y-x$fitted.values)/P
+  a=z/P
   u00=(a^2)*(P0^2)/var0
 
 
   gerar_J=function(theta){
+    S_aux=x$functions$function_sigma(theta,x$data)
+    var=Matrix::diag(S_aux)
     V_aux=x$functions$function_V(theta,data)
     D_aux=x$functions$function_D(theta,data)
-    var=Matrix::diag(x$functions$function_sigma(theta,x$data))
-    z=x$target-x$functions$function_mu(theta,x$data)
+    z=y-x$functions$function_mu(theta,x$data)
     T=D_aux+z*V_aux/var
     B=-z*D_aux -0.5*V_aux
     A=-V_aux/var^2
@@ -688,7 +689,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
     Ad = Ad - x$functions$function_C(theta,data)/var^2
     E = -0.5*(Ad*(var-z^2)) - x$functions$function_D2(theta,data)*z/var
     G = apply(B[,aux1]*A[,aux2] + E,2,sum) %>% matrix(nrow=length(theta))
-    Matrix::t(T)%*%solve(x$var)%*%D_aux + G
+    Matrix::t(T)%*%solve(S_aux)%*%D_aux + G
   }
 
 

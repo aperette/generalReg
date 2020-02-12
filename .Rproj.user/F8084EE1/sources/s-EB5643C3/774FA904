@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1581530979017.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "774FA904",
+    "lastKnownWriteTime" : 3180141808686473843,
+    "last_content_update" : 1581530979017,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "4748A44A",
+        "caption" : "rho2",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=rho2&cache_key=4748A44A",
+        "displayedObservations" : 100,
+        "environment" : "",
+        "object" : "rho2",
+        "preview" : 0,
+        "totalObservations" : 100,
+        "variables" : 5
+    },
+    "relative_order" : 9,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}
