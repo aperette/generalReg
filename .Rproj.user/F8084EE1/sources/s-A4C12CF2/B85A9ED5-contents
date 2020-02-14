@@ -720,7 +720,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   Ud0 = Matrix::t(Q00)%*%solve(S0)%*%R
   U0= Matrix::t(x$functions$function_F(par_teste,data)) %*% x$functions$function_H(S0) %*% x$functions$function_s(mu0,S0,par_teste,all = F)
 
-  ld = Matrix::t(R)%*%solve(x$var)%*%(-z)
+  ld = Matrix::t(R)%*%solve(S)%*%(-z)
   ld0 = Matrix::t(R)%*%solve(S0)%*%(-z0)
 
   w=which(!names(theta) %in% names(parameters))

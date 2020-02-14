@@ -89,6 +89,11 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
     Matrix::t(T)%*%solve(S_aux)%*%x$functions$function_D(theta,data) + G
   }
   
+  # gerar_J=function(theta){
+  #   Fn=x$functions$function_F(theta,x$data)
+  #   Hn=x$functions$function_H(x$functions$function_sigma(theta,x$data))
+  #   Matrix::t(Fn)%*%Hn%*%Fn}
+  
   J = gerar_J(theta)
   J0 = gerar_J(par_teste)
   
@@ -122,10 +127,10 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   w=which(!names(theta) %in% names(parameters))
   
   p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J0[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
-  p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
+  p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(q/2)
   p3=LR^(q/2-1)
   p4=Matrix::t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0
-  rho=p1*p2[1,1]/(p3*p4[1,1])
+  rho=p1*as.numeric(p2)/(p3*as.numeric(p4))
   LR2=LR-2*log(rho)
   
   if((0 + (p1<0) + (p2[1,1]<0) + (p3<0) + (p4[1,1]<0))>0)
@@ -140,7 +145,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   pv2=tryCatch(pchisq(LR2,df = q,lower.tail = F), error=function(e) NA)
   
   
-  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2,p1=p1,p2=as.numeric(p2),p3=p3,p4=as.numeric(p4),J00=J00)
+  out = list(LR=LR,p_value=pv, LR_correction=LR2, p_value_correction=pv2,p1=p1,p2=p2,p3=p3,p4=p4,q=q)
   class(out) = "lr_ratio"
   return(out)
 }
