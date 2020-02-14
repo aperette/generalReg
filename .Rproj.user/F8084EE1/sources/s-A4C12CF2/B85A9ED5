@@ -7,13 +7,13 @@
     "folds" : "",
     "hash" : "0",
     "id" : "B85A9ED5",
-    "lastKnownWriteTime" : 1581534507,
-    "last_content_update" : 1581534507729,
+    "lastKnownWriteTime" : 1581706013,
+    "last_content_update" : 1581706013882,
     "path" : "C:/Users/andrecp/Desktop/Mestrado/pacote/generalReg/R/reg.R",
     "project_path" : "R/reg.R",
     "properties" : {
-        "cursorPosition" : "738,0",
-        "scrollLine" : "725"
+        "cursorPosition" : "728,57",
+        "scrollLine" : "719"
     },
     "relative_order" : 1,
     "source_on_save" : false,

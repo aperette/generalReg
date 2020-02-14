@@ -726,7 +726,7 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
   w=which(!names(theta) %in% names(parameters))
 
   p1=Matrix::det(J)^0.5*Matrix::det(Ud0)^-1*Matrix::det(J0[w,w])^0.5*Matrix::det(J00[w,w])^-0.5*Matrix::det(J00)^0.5
-  p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(p/2)
+  p2=(Matrix::t(U0)%*%solve(J00,tol=1e-200) %*% U0)^(q/2)
   p3=LR^(q/2-1)
   p4=Matrix::t(ld-ld0)%*%Matrix::solve(Ud0,tol=1e-20)%*%U0
   rho=p1*p2[1,1]/(p3*p4[1,1])
