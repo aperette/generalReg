@@ -4,9 +4,15 @@
 \alias{reg_general}
 \title{Normal regression model with general parametrization}
 \usage{
-reg_general(formula = NULL, formula_var = NULL, data, start = NULL,
-  method = "NR", control = list(reltol = 1e-04, max_it = 500, kappa =
-  "AUTO", verbose = 0), bias_correction = T)
+reg_general(
+  formula = NULL,
+  formula_var = NULL,
+  data,
+  start = NULL,
+  method = "NR",
+  control = list(reltol = 1e-04, max_it = 500, kappa = "AUTO", verbose = 0),
+  bias_correction = T
+)
 }
 \arguments{
 \item{formula}{a nonlinear model formula including variables and parameters}
@@ -18,20 +24,30 @@ Can also be a list or an environment, but not a matrix}
 
 \item{start}{A named list of starting estimates. When \code{start} is missing, a very cheap guess for \code{start} is tried and parameters names are automatically identified}
 
+\item{method}{The method do be used. One of "NR"(default), "optim", "pso". See ‘Details’}
+
 \item{control}{A list of control parameters. See 'Details'}
 
 \item{bias_correction}{Logical. Should a bias correction be estimated for the parameters?}
 }
 \description{
 Determine the estimates of the parameters of a
-general parametrization model with a Newthon Raphson method
+general parametrization model with a Newthon Raphson method.
+Also, calculate the Second-order bias-corrected estimate
 }
 \details{
 The control argument is a list that can supply any of the following components:
  \itemize{
  \item control$max_it Maximum number of iterations
  \item control$reltol Maximum difference between iterations to consider convergence
+ \item control$kappa Parameter that control the variation of values on each iteraction, if the chosen method is 'NR'. Higher values need fewer interactions to converge, but may produce bad results. The default 'AUTO' choose the best value for each iteraction.
 }
+
+The default method ("NR") is the Scoring algorithm (also known as Fisher's scoring): is a form of Newton's method used in statistics to solve maximum likelihood equations numerically
+Optim method is an implementation of that of Nelder and Mead (1965), that uses only function values and is robust but relatively slow.
+Pso method is particle swarm optimization: a computational method that optimizes a problem by iteratively trying to improve a candidate solution with regard to a given measure of quality. Initial values are not required.
+
+
 
  @examples
 \dontrun{

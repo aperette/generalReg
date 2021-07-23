@@ -1,7 +1,8 @@
 #' @title  Normal regression model with general parametrization
 #'
 #' @description Determine the estimates of the parameters of a
-#' general parametrization model with a Newthon Raphson method
+#' general parametrization model with a Newthon Raphson method.
+#' Also, calculate the Second-order bias-corrected estimate
 #'
 #'
 #' @param formula a nonlinear model formula including variables and parameters
@@ -9,6 +10,7 @@
 #' @param data A data frame in which to evaluate the variables in \code{formula} and \code{formula_var}.
 #' Can also be a list or an environment, but not a matrix
 #' @param start A named list of starting estimates. When \code{start} is missing, a very cheap guess for \code{start} is tried and parameters names are automatically identified
+#' @param method The method do be used. One of "NR"(default), "optim", "pso". See ‘Details’
 #' @param control A list of control parameters. See 'Details'
 #' @param bias_correction Logical. Should a bias correction be estimated for the parameters?
 #'
@@ -17,7 +19,14 @@
 #'  \itemize{
 #'  \item control$max_it Maximum number of iterations
 #'  \item control$reltol Maximum difference between iterations to consider convergence
+#'  \item control$kappa Parameter that control the variation of values on each iteraction, if the chosen method is 'NR'. Higher values need fewer interactions to converge, but may produce bad results. The default 'AUTO' choose the best value for each iteraction.
 #'}
+#'
+#' The default method ("NR") is the Scoring algorithm (also known as Fisher's scoring): is a form of Newton's method used in statistics to solve maximum likelihood equations numerically
+#' Optim method is an implementation of that of Nelder and Mead (1965), that uses only function values and is robust but relatively slow.
+#' Pso method is particle swarm optimization: a computational method that optimizes a problem by iteratively trying to improve a candidate solution with regard to a given measure of quality. Initial values are not required.
+#'
+#'
 #'
 #'  @examples
 #' \dontrun{
@@ -74,10 +83,12 @@ reg_general=function(formula=NULL,
 
   inputs = list(formula=formula,formula_var=formula_var,control=control,start=start,bias_correction=bias_correction)
 
+  #mu é a formula do vetor de média e S a formula da variância
   resposta=data[,as.character(formula)[2]]
   mu=as.character(formula)[3]
   S=tail(as.character(formula_var),1)
 
+  #Seleciona na tabela os campos necessários e os parâmetros que serão estimados
   cl <- match.call()
   n=nrow(data)
   q=1
@@ -96,8 +107,17 @@ reg_general=function(formula=NULL,
   if(control$verbose!=0) cat("Parameters:",paste0(theta,collapse=", "),"\n")
   if(control$verbose!=0) cat("Predictors:",paste0(covar,collapse=","),"\n")
 
+  #Define a função de verossimilhança (normal), baseada na média e na variância
   l=paste0("-0.5*log(",S,") -0.5*(",mu,"-resposta)^2/(",S,")")
 
+  #Desenvolve as formulas das matrizes necessárias para os cálculos:
+  ## D é derivada da média por theta
+  ## V é a derivada do vec(matriz de variância) por theta
+  ## F é a matriz empilhada de D e V
+  ## ld é a derivada da função de verossimilhança por theta
+  ## a é a matriz com a segunda derivada da média por theta
+  ## C é a matriz com a segunda derivada vec(matriz de variância) por theta
+  ## Pd é a derivada de Sigma^(0.5) por theta
   Di=array()
   Vi=array()
   Pd=array()
@@ -117,6 +137,7 @@ reg_general=function(formula=NULL,
   Fi=rbind(Di,Vi)
   aC=rbind(c(a),c(C))
 
+  #Processo para criar a função de verossimilhança parametrizada para os valores de theta
   eval(parse(text=paste0(
     "gerar_l = function(theta, data,resposta){
     N=nrow(data)
@@ -124,6 +145,7 @@ reg_general=function(formula=NULL,
     ((rep(1,N)*",estruturar(mu,par,asArray=T),")-resposta)^2/(rep(1,N)*",estruturar(S,par,asArray=T),"))}"
     )))
 
+  #Processo para criar a função de log-verossimilhança parametrizada para os valores de theta
   eval(parse(text=paste0(
     "log_like=function(theta, data){
     sum(dnorm(c(",paste(resposta,collapse=","),"),",
@@ -132,7 +154,7 @@ reg_general=function(formula=NULL,
     }"
   )))
 
-
+  #Processo para criar a função do vetor de médias parametrizada para os valores de theta
   eval(parse(text=paste0(
     "gerar_mu = function(theta, data){
     N=nrow(data)
@@ -141,6 +163,7 @@ reg_general=function(formula=NULL,
     ,")}"
   )))
 
+  #Processo para criar a função da matriz Sigma parametrizada para os valores de theta
   eval(parse(text=paste0(
     "gerar_sigma = function(theta, data){
     N=nrow(data)
@@ -149,6 +172,7 @@ reg_general=function(formula=NULL,
     "),n=N)}"
   )))
 
+  #Processo para criar a matriz D parametrizada para os valores de theta
   eval(parse(text=paste0(
     "gerar_D = function(theta, data){
     N=nrow(data)
@@ -158,6 +182,7 @@ reg_general=function(formula=NULL,
     length(theta),", sparse=T,byrow=T)}"
   )))
 
+  #Processo para criar a matriz V parametrizada para os valores de theta
   eval(parse(text=paste0(
     "gerar_V = function(theta, data){
     N=nrow(data)
@@ -167,6 +192,7 @@ reg_general=function(formula=NULL,
     length(theta),", sparse=T,byrow=T)}"
   )))
 
+  #Gerar matriz J (D kronecker D), necessária para cálculo da correção de viés
   gerar_J = function(D){
     dt=dplyr::tibble(valor=as.vector(D),
                      id=rep(1:nrow(D),ncol(D)),
@@ -181,6 +207,7 @@ reg_general=function(formula=NULL,
       Matrix::Matrix(nrow=2*nrow(D),sparse=T)
   }
 
+  #Cálculo da matriz G necessária na correção de viés
   eval(parse(text=paste0(
     "gerar_G = function(theta, data){
     N=nrow(data)
@@ -190,6 +217,7 @@ reg_general=function(formula=NULL,
     ncol(aC),", sparse=T,byrow=T)}"
   )))
 
+  #Função para cálculo da matriz F
   eval(parse(text=paste0(
     "gerar_F = function(theta, data){
     N=nrow(data)
@@ -199,6 +227,7 @@ reg_general=function(formula=NULL,
     ncol(Fi),", sparse=T,byrow=T)}"
   )))
 
+  #Função para calcular a correção de viés de segunda ordem
   correcao_vies=function(){
 
     D=gerar_D(theta_val,data)
@@ -212,6 +241,7 @@ reg_general=function(formula=NULL,
 
     K%*%Matrix::t(Fn)%*%Hn%*%e}
 
+  #FUnção que gera a matriz H parametrizada por theta
   gerar_H = function(sigma){
     Matrix::diag(sigma) %>%
     {rbind(1/.,0.5*(.^-2))} %>%
@@ -219,6 +249,7 @@ reg_general=function(formula=NULL,
       {Matrix::.sparseDiagonal(x=.,n=length(.))}
   }
 
+  #Função que gera o vetor de residuos s parametrizado por theta
   gerar_s=function(media,sigma,theta,p=control$kappa,all=T){
     res=resposta-media
     s2=-(Matrix::diag(sigma)-res^2)
@@ -227,7 +258,8 @@ reg_general=function(formula=NULL,
     S=Fn %*% unlist(theta) + s*p
     return(S)}
 
-  #skovgaard:
+  #Gerar a matriz Pd (derivada de Sigma^(0.5)) parametrizada por theta.
+  #Necessário para correção de Skoovgaard nos testes de razão de verossimilhança
   eval(parse(text=paste0(
     "gerar_Pd = function(theta, data){
     N=nrow(data)
@@ -236,6 +268,7 @@ reg_general=function(formula=NULL,
     ,"), nrow=N, sparse=T)}"
   )))
 
+  #Gera a matriz C parametrizada por theta
   eval(parse(text=paste0(
     "gerar_C = function(theta, data){
     N=nrow(data)
@@ -244,6 +277,7 @@ reg_general=function(formula=NULL,
     ,"), nrow=N, sparse=T)}"
   )))
 
+  #Gera a matriz D2, com a segunda derivada da media, parametrizada por theta
   eval(parse(text=paste0(
     "gerar_D2 = function(theta, data){
     N=nrow(data)
@@ -252,6 +286,7 @@ reg_general=function(formula=NULL,
     ,"), nrow=N, sparse=T)}"
   )))
 
+  #Gerar a matriz M2 Necessária para cálculo da informação de Fisher observada
   gerar_M2=function(media,sigma){
     z=resposta-media
     c(-Matrix::diag(sigma),
@@ -268,12 +303,14 @@ reg_general=function(formula=NULL,
   erros=array()
   interacao=list()
   dif=NA
+  #Se não tiver valores iniciais, preenche qualquer valor (tudo 1)
   if(!is.null(start))
     start= unlist(start,use.names = F)
   if(is.null(start))
     start= rep(1,length(theta))
   theta_val = data.frame(matrix(start,nrow=1,dimnames = list(NULL,theta)))
 
+  #Metodo de pso
   if(method=="pso"){
     if(control$verbose!=0) cat("In pso, start values are not used\n")
     logit=function(p){
@@ -290,11 +327,12 @@ reg_general=function(formula=NULL,
                                      trace=control$verbose,REPORT=control$verbose))
     k=opt$counts[2]
     if(opt$convergence==2)
-      stop("Maximal number of iterations reached",call. = F)
+      warning("Maximal number of iterations reached",call. = F)
     theta_val_novo = logit(opt$par)
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=logit(opt$par),nome=theta) %>% tidyr::spread(nome,valor)
   }
+  #Metodo gamlss
   if(method=="gamlss"){
 
     mu_names = theta[stringr::str_detect(mu,theta)]
@@ -317,6 +355,7 @@ reg_general=function(formula=NULL,
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=fit$coefficients,nome=theta) %>% tidyr::spread(nome,valor)
   }
+  #Metodo optim
   if(method=="optim"){
     opt = optim(unlist(theta_val),
                 fn=function(par){
@@ -332,6 +371,7 @@ reg_general=function(formula=NULL,
     names(theta_val_novo)=theta
     theta_val=data.frame(valor=opt$par,nome=theta) %>% tidyr::spread(nome,valor)
   }
+  #Metodo iterativo
   if(method=="NR"){
     k=1
     dif=1
@@ -347,26 +387,23 @@ reg_general=function(formula=NULL,
     inv_fisher= tryCatch(expr={Matrix::solve(fisher,tol=1e-2000)},
                          error=function(e)NA)
     loglike_sim[k]=sum(dnorm(resposta,media,sqrt(Matrix::diag(sigma)),log = T))
-
+    #Calcula o melhor kappa para a iteração
     if(is.numeric(control$kappa)){
       kappa=control$kappa
       Sn=gerar_s(media,sigma,theta_val)
-      # theta_val_novo = tryCatch(expr={(Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%Sn)[,1]},
-      #                         error=function(e)NA)
       theta_val_novo = tryCatch(expr={unlist(theta_val) + control$kappa*(inv_fisher %*% score)[,1]},
                               error=function(e)NA)}
     if(control$kappa=="AUTO"){
       theta_atual=theta_val
       suppressWarnings(expr={
         kappa=optim(0.5,function(par){
-          # teste = tryCatch(expr={
-          #   (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = par[1]))[,1]},
           teste = tryCatch(expr={
             (unlist(theta_atual) + par[1]*(inv_fisher %*% score))[,1]},error=function(e)NA)
           theta_val[1,]=teste
           -sum(dnorm(resposta,gerar_mu(theta_val,data),sqrt(Matrix::diag(gerar_sigma(theta_val,data))),log = T))},
           method="Brent",lower=0,upper=1)$par
         })
+      #Atualiza valor
       theta_val_novo = tryCatch(expr={
         (Matrix::solve(Matrix::t(Fn)%*%Hn%*%Fn,tol=1e-2000) %*% Matrix::t(Fn)%*%Hn%*%gerar_s(media,sigma,theta_val,p = kappa))[,1]},
         error=function(e)NA)
@@ -401,10 +438,8 @@ reg_general=function(formula=NULL,
   }
   if(k >= control$max_it | is.na(dif)) stop("Maximal number of iterations reached",call. = F)
   k=k-1
-  # if(which.max(loglike_sim)!=length(loglike_sim) &
-  #    lm(erros~index,data=data.frame(erros,index=1:length(erros)))$coef[2]>0)
-  #   warning("Estimate may not be a Maximum Likelihood Estimation",call. = F)
-  }
+}
+  #Faz os cálculos com as estimativas encontradas
 
   sigma=gerar_sigma(theta_val,data)
   media=gerar_mu(theta_val,data)
@@ -427,6 +462,7 @@ reg_general=function(formula=NULL,
 
 if(is.null(names(theta_val))) names(theta_val)= theta
 
+  #Retorna as informações necessárias
   out <- list(
     parameters=unlist(theta_val),
     corrected_parameters=corrigido,
@@ -467,6 +503,13 @@ if(is.null(names(theta_val))) names(theta_val)= theta
 #' @export
 setClass("genReg")
 
+#' @export
+bias_correction=function(formula=NULL,
+                         formula_var=NULL,
+                         data,
+                         parameters=NULL){
+  reg_general(formula, formula_var, data, start=parameters, method=NA, bias_correction=TRUE)
+}
 
 #' @method print genReg
 #' @export
@@ -755,13 +798,18 @@ likelihood_ratio <- function(x, parameters,correction=FALSE,control=NULL,start=N
 print.lr_ratio <- function(x, ...){
   cat("Likelihood ratio test:\n")
   x$LR=paste0("LR:",round(x$LR,3))
-  x$p_value=paste0("p-value:",formatC(x$p_value,format = "e", digits = 2))
+  if(x$p_value>=0.01){
+    x$p_value=round(x$p_value,4)}
+  if(x$p_value<0.01){
+  x$p_value=paste0("p-value:",formatC(x$p_value,format = "e", digits = 2))}
   cat(c(x$LR,x$p_value),"\n")
   if(length(x)>2){
     cat("Skovgaard correction:\n")
   x$LR_correction=paste0("LR*:",round(x$LR_correction,3))
-  x$p_value_correction=paste0("p-value:",formatC(x$p_value_correction,format = "e", digits = 2))
+  if(x$p_value_correction>=0.01){
+    x$p_value_correction=round(x$p_value_correction,4)}
+  if(x$p_value_correction<0.01){
+  x$p_value_correction=paste0("p-value:",formatC(x$p_value_correction,format = "e", digits = 2))}
   cat(c(x$LR_correction,x$p_value_correction),"\n")
-
   }
 }
