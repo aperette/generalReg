@@ -619,8 +619,8 @@ logLik.genReg <- function(x, bias_correction=FALSE, ...){
 
 #' @method predict genReg
 #' @export
-predict.genReg <- function(x, newdata=NULL, type = "mean", bias_correction = NULL, ...){
-  if(is.null(bias_correction)) bias_correction=x$inputs$bias_correction
+predict.genReg <- function(x, newdata=NULL, type = "mean", bias_correction = FALSE, ...){
+  if(bias_correction & x$inputs$bias_correction==FALSE) stop("Corrected parameters not founded",call. = F)
   if(!type %in% c("mean","var")) stop("type must be 'mean' or 'var'",call. = FALSE)
   parameters=sapply(x$parameters,list)
   if(bias_correction){
